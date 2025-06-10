@@ -68,7 +68,7 @@ class _AnswersPageState extends State<AnswersPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CSAppBar(title: "내가 푼 문제 목록"),
+      appBar: CSAppBar(title: widget.title),
       body: _buildBody(),
     );
   }
@@ -91,7 +91,14 @@ class _AnswersPageState extends State<AnswersPage> {
       itemCount: _attempts.length,
       itemBuilder: (context, index) {
         final attempt = _attempts[index];
-        final formattedDate = DateFormat('yyyy년 MM월 dd일 HH:mm').format(attempt.solvedAt);
+        print('--- Problem at index $index ---');
+        print('1. Original DateTime from model: ${attempt.solvedAt}');
+        print('2. Is it UTC?: ${attempt.solvedAt.isUtc}');
+        final localSolvedAt = attempt.solvedAt.toLocal();
+        print('3. Converted to Local: $localSolvedAt');
+        print('4. Is the new time UTC?: ${localSolvedAt.isUtc}');
+        print('--------------------------');
+        final formattedDate = DateFormat('yyyy년 MM월 dd일 HH:mm').format(localSolvedAt);
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
