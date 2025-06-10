@@ -4,6 +4,7 @@ import 'appbar.dart'; // 사용자 정의 AppBar (CSAppBar)
 import 'dart:async';
 import 'dart:math'; // 랜덤 선택
 import 'package:uuid/uuid.dart'; // 고유 ID 생성을 위해 추가
+import 'studydataupdater.dart';
 
 // String extension for isNullOrEmpty (Dart 2.12+ 에서는 ?.isEmpty 로 충분)
 // 하지만 null일 경우를 위해 확장 함수가 더 안전할 수 있습니다.
@@ -198,8 +199,14 @@ class _QuestionBankPageState extends State<QuestionBankPage> {
     finally { if (mounted) setState(() => _isLoadingQuestions = false); }
   }
 
-  void _checkAnswer(String uniqueDisplayId, String correctAnswerText, String questionType) {
-    final userAnswer = _controllers[uniqueDisplayId]?.text ?? "";
+  // 이제 이 함수는 정답 확인과 동시에 Firestore에 기록을 저장합니다.
+  void _checkAnswer(Map<String, dynamic> questionData) {
+    final String uniqueDisplayId = questionData['uniqueDisplayId'] as String;
+    final String correctAnswerText = questionData['answer'] as String? ?? "";
+    final String questionType = questionData['type'] as String? ?? "";
+    final String userAnswer = _controllers[uniqueDisplayId]?.text ?? "";
+
+    // --- 기존 정답 확인 로직 (거의 동일) ---
     String processedUserAnswer = userAnswer.trim();
     String processedCorrectAnswer = correctAnswerText.trim();
     bool isCorrect = processedUserAnswer.toLowerCase() == processedCorrectAnswer.toLowerCase();
@@ -213,15 +220,26 @@ class _QuestionBankPageState extends State<QuestionBankPage> {
         String correctAnswerVal = correctAnswerMatch.group(1) ?? "";
         if (double.tryParse(userAnswerVal) != null && double.tryParse(correctAnswerVal) != null) {
           isCorrect = (double.parse(userAnswerVal) - double.parse(correctAnswerVal)).abs() < 0.0001;
-        } else { isCorrect = userAnswerVal == correctAnswerVal; }
+        } else {
+          isCorrect = userAnswerVal == correctAnswerVal;
+        }
       }
     }
+
+    // --- UI 상태 업데이트 (기존과 동일) ---
     if (mounted) {
       setState(() {
         _userSubmittedAnswers[uniqueDisplayId] = userAnswer;
         _submissionStatus[uniqueDisplayId] = isCorrect;
       });
     }
+
+    // *** Firestore에 풀이 기록 저장 (새로 추가된 핵심 로직) ***
+    FirestoreService.saveQuestionAttempt(
+      questionData: questionData,
+      userAnswer: userAnswer,
+      isCorrect: isCorrect,
+    );
   }
 
   void _tryAgain(String uniqueDisplayId) {
@@ -364,7 +382,7 @@ class _QuestionBankPageState extends State<QuestionBankPage> {
               onChanged: (text) { if (currentSubmissionStatus == null && mounted) setState(() {}); },
               onSubmitted: (value) {
                 if (currentSubmissionStatus == null && uniqueDisplayId != null && correctAnswerForDisplay != null) {
-                  _checkAnswer(uniqueDisplayId, correctAnswerForDisplay, actualQuestionType);
+                  _checkAnswer(questionData);
                 }
               },
               maxLines: actualQuestionType == "서술형" ? null : 1,
@@ -375,8 +393,12 @@ class _QuestionBankPageState extends State<QuestionBankPage> {
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 ElevatedButton(
-                  onPressed: currentSubmissionStatus == null && uniqueDisplayId != null && correctAnswerForDisplay != null
-                      ? () { FocusScope.of(context).unfocus(); _checkAnswer(uniqueDisplayId, correctAnswerForDisplay, actualQuestionType); }
+                  onPressed: currentSubmissionStatus == null
+                      ? () {
+                    FocusScope.of(context).unfocus();
+                    // *** 변경된 부분: 이제 questionData 전체를 넘겨줍니다. ***
+                    _checkAnswer(questionData);
+                  }
                       : null,
                   child: Text(currentSubmissionStatus == null ? '정답 확인' : '채점 완료'),
                   style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), textStyle: const TextStyle(fontSize: 13)),
