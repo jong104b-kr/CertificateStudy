@@ -110,7 +110,7 @@ class _AnswersPageState extends State<AnswersPage> {
               children: [
                 // 1. 문제 출처 및 날짜
                 Text(
-                  "${attempt.sourceExamId} (원본 ${attempt.originalQuestionNo}번)",
+                  "${attempt.sourceExamId} ${attempt.originalQuestionNo}번",
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
                 Text(
