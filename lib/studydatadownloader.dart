@@ -4,11 +4,11 @@ class QuestionAttempt {
   final String userId;
   final DateTime solvedAt; // Firestore의 Timestamp를 DateTime으로 변환하여 사용
   final bool isCorrect;
-  final String userAnswer;
+  final dynamic userAnswer;
   final String sourceExamId;
   final String originalQuestionNo;
   final String questionText;
-  final String correctAnswer;
+  final dynamic correctAnswer;
   final String questionType;
 
   QuestionAttempt({

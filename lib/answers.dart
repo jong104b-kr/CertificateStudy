@@ -91,14 +91,18 @@ class _AnswersPageState extends State<AnswersPage> {
       itemCount: _attempts.length,
       itemBuilder: (context, index) {
         final attempt = _attempts[index];
-        print('--- Problem at index $index ---');
-        print('1. Original DateTime from model: ${attempt.solvedAt}');
-        print('2. Is it UTC?: ${attempt.solvedAt.isUtc}');
         final localSolvedAt = attempt.solvedAt.toLocal();
-        print('3. Converted to Local: $localSolvedAt');
-        print('4. Is the new time UTC?: ${localSolvedAt.isUtc}');
-        print('--------------------------');
         final formattedDate = DateFormat('yyyy년 MM월 dd일 HH:mm').format(localSolvedAt);
+
+        // REVISED: correctAnswer의 타입에 따라 표시할 문자열을 결정하는 로직 추가
+        String displayableCorrectAnswer;
+        if (attempt.correctAnswer is List) {
+          // 타입이 리스트이면, 원소들을 ', '로 합쳐서 보여줍니다.
+          displayableCorrectAnswer = (attempt.correctAnswer as List).join(' || ');
+        } else {
+          // 리스트가 아니면(문자열 등), 그대로 문자열로 변환하여 사용합니다.
+          displayableCorrectAnswer = attempt.correctAnswer.toString();
+        }
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -108,7 +112,6 @@ class _AnswersPageState extends State<AnswersPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. 문제 출처 및 날짜
                 Text(
                   "${attempt.sourceExamId} ${attempt.originalQuestionNo}번",
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
@@ -118,15 +121,11 @@ class _AnswersPageState extends State<AnswersPage> {
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 8),
-
-                // 2. 문제 내용
                 Text(
                   attempt.questionText,
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 12),
-
-                // 3. 정답/오답 여부 및 답안 비교
                 Row(
                   children: [
                     Icon(
@@ -140,7 +139,8 @@ class _AnswersPageState extends State<AnswersPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text("내 답안: ${attempt.userAnswer}", style: const TextStyle(fontSize: 14)),
-                          Text("실제 정답: ${attempt.correctAnswer}", style: const TextStyle(fontSize: 14, color: Colors.blue)),
+                          // REVISED: 변환된 문자열을 사용합니다.
+                          Text("실제 정답: $displayableCorrectAnswer", style: const TextStyle(fontSize: 14, color: Colors.blue)),
                         ],
                       ),
                     ),

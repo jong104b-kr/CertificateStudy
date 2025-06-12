@@ -129,7 +129,7 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
 
     FirestoreService.saveQuestionAttempt(
       questionData: questionData,
-      userAnswer: userAnswers.join('; '),
+      userAnswer: userAnswers.join(' || '),
       isCorrect: overallCorrect,
     );
   }
@@ -300,7 +300,7 @@ class _QuestionInteractiveDisplayState extends State<QuestionInteractiveDisplay>
           else if (correctAnswers.isNotEmpty && actualQuestionType != "발문")
             Padding(
               padding: EdgeInsets.only(top: 4.0, left: (widget.showQuestionText ? 0 : 8.0)),
-              child: Text('정답: ${correctAnswers.join(", ")}', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.w500)),
+              child: Text('정답: ${correctAnswers.join(" || ")}', style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.w500)),
             )
           else if (actualQuestionType != "발문" && correctAnswers.isEmpty && widget.showQuestionText)
               const Padding(
