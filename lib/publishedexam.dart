@@ -240,7 +240,7 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
                 final String sourceExamId = mainQuestionData['sourceExamId'] as String? ?? '출처 미상';
 
                 String typeForAnswerArea = (type == "발문" || type.isEmpty) ? "" : " ($type)";
-                String mainTitleText = '문제 $pageOrderNo (원본 ${originalNo ?? "N/A"}번)';
+                String mainTitleText = '${originalNo ?? "N/A"}번';
 
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 6.0),

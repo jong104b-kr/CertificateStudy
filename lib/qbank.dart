@@ -202,7 +202,7 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
                 final String sourceExamId = mainQuestionData['sourceExamId'] as String? ?? '출처 미상';
 
                 String titleTypeDisplay = (type == "발문" || type.isEmpty) ? "" : " ($type)";
-                String mainTitleText = '문제 $pageOrderNo (출처: $sourceExamId - 원본 ${originalNo ?? "N/A"}번)';
+                String mainTitleText = '문제 $pageOrderNo (출처: $sourceExamId - ${originalNo ?? "N/A"}번)';
 
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 6.0),
