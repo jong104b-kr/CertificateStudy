@@ -532,11 +532,11 @@ class _QuestionBankPageState extends State<QuestionBankPage> {
                       // _buildQuestionWidgetsRecursive를 직접 호출하지 않고,
                       // 주 문제의 풀이 부분과 하위 문제 부분을 명시적으로 구성
                       _buildQuestionInteractiveDisplay(
-                        questionData: mainQuestionData,
-                        leftIndent: 16.0, // ExpansionTile children 기본 들여쓰기
-                        displayNoWithPrefix: "풀이${titleTypeDisplay}", // 주 문제의 풀이 영역임을 명시
-                        questionTypeToDisplay: titleTypeDisplay,
-                        showQuestionText: false
+                          questionData: mainQuestionData,
+                          leftIndent: 16.0, // ExpansionTile children 기본 들여쓰기
+                          displayNoWithPrefix: "풀이${titleTypeDisplay}", // 주 문제의 풀이 영역임을 명시
+                          questionTypeToDisplay: titleTypeDisplay,
+                          showQuestionText: false
                       ),
                       // 하위 문제들 (sub_questions)
                       Builder(builder: (context) { // Builder를 사용하여 로컬 변수 사용
