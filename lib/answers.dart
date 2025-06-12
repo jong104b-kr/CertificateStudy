@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart'; // 날짜 포맷팅을 위해 import
 
-import 'studydatadownloader.dart'; // 방금 만든 모델 import
-import 'appbar.dart'; // 기존에 사용하시던 AppBar
+import 'studydatadownloader.dart';
+import 'appbar.dart';
 
 class AnswersPage extends StatefulWidget {
   final String title;

@@ -10,6 +10,7 @@ class QuestionAttempt {
   final String questionText;
   final dynamic correctAnswer;
   final String questionType;
+  final Map<String, dynamic> fullQuestionData;
 
   QuestionAttempt({
     required this.userId,
@@ -21,6 +22,7 @@ class QuestionAttempt {
     required this.questionText,
     required this.correctAnswer,
     required this.questionType,
+    required this.fullQuestionData,
   });
 
   // Firestore DocumentSnapshot으로부터 ProblemAttempt 객체를 생성하는 factory 생성자
@@ -38,6 +40,7 @@ class QuestionAttempt {
       questionText: data['questionText'] ?? '문제 내용 없음',
       correctAnswer: data['correctAnswer'] ?? '정답 정보 없음',
       questionType: data['questionType'] ?? '타입 없음',
+      fullQuestionData: Map<String, dynamic>.from(data['fullQuestionData'] ?? {}),
     );
   }
 }

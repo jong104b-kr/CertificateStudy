@@ -1,10 +1,9 @@
-// file: publishedexam.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'appbar.dart'; // 사용자 정의 AppBar (CSAppBar)
 import 'dart:async';
 import 'questions_common.dart'; // 공통 코드 임포트
+import 'question_list.dart';
 
 class PublishedExamPage extends StatefulWidget {
   final String title;
@@ -170,6 +169,35 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
 
   // 4. 복잡했던 위젯 빌드 함수는 모두 삭제됨
 
+  Widget _buildBody() {
+    if (_isLoadingQuestions) return const Center(child: CircularProgressIndicator());
+    if (_errorMessage.isNotEmpty && _questions.isEmpty) return Center(child: Text(_errorMessage, style: const TextStyle(color: Colors.red)));
+    if (_questions.isEmpty) return Center(child: Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Text(_selectedYear == null ? '년도, 회차, 등급을 선택하고 시험지를 불러오세요.' : '선택한 조건의 문제가 없습니다.', textAlign: TextAlign.center),
+    ));
+
+    // REVISED: 공통 위젯 사용
+    return QuestionListView(
+      questions: _questions,
+      getControllers: getControllersForQuestion,
+      onCheckAnswer: checkAnswer,
+      onTryAgain: tryAgain,
+      submissionStatus: submissionStatus,
+      userSubmittedAnswers: userSubmittedAnswers,
+      titleBuilder: (context, questionData, index) {
+        final originalNo = questionData['no'] as String?;
+        return Text('${originalNo ?? "N/A"}번', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16.5));
+      },
+      subtitleBuilder: (context, questionData, index) {
+        final questionText = questionData['question'] as String? ?? '';
+        return questionText.isNotEmpty
+            ? Padding(padding: const EdgeInsets.only(top: 5.0), child: Text(questionText, style: const TextStyle(fontSize: 15.0, color: Colors.black87, height: 1.4)))
+            : null;
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -217,128 +245,7 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
               ],
             ),
           ),
-          if (_errorMessage.isNotEmpty && !_isLoadingOptions && _questions.isEmpty)
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0), child: Text(_errorMessage, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
-          Expanded(
-            child: _isLoadingQuestions
-                ? const Center(child: CircularProgressIndicator())
-                : _questions.isEmpty
-                ? Center(child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Text(_selectedYear == null ? '년도, 회차, 등급을 선택하고 시험지를 불러오세요.' : '선택한 조건의 문제가 없습니다.', textAlign: TextAlign.center),
-            ))
-                : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-              itemCount: _questions.length,
-              itemBuilder: (context, index) {
-                final mainQuestionData = _questions[index];
-                final String pageOrderNo = "${index + 1}";
-                final String? originalNo = mainQuestionData['no'] as String?;
-                final String type = mainQuestionData['type'] as String? ?? '';
-                final String questionTextForSubtitle = mainQuestionData['question'] as String? ?? '';
-                final String uniqueId = mainQuestionData['uniqueDisplayId'] as String;
-                final String sourceExamId = mainQuestionData['sourceExamId'] as String? ?? '출처 미상';
-
-                String typeForAnswerArea = (type == "발문" || type.isEmpty) ? "" : " ($type)";
-                String mainTitleText = '${originalNo ?? "N/A"}번';
-
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 6.0),
-                  elevation: 1.5,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.0)),
-                  child: ExpansionTile(
-                    key: ValueKey(uniqueId),
-                    tilePadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
-                    expandedCrossAxisAlignment: CrossAxisAlignment.start,
-                    childrenPadding: EdgeInsets.zero,
-                    title: Text(mainTitleText, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16.5)),
-                    subtitle: questionTextForSubtitle.isNotEmpty ? Padding(padding: const EdgeInsets.only(top: 5.0), child: Text(questionTextForSubtitle, style: const TextStyle(fontSize: 15.0, color: Colors.black87, height: 1.4))) : null,
-                    initiallyExpanded: _questions.length <= 3,
-                    children: <Widget>[
-                      // ===================[수정된 위젯 호출 1]===================
-                      QuestionInteractiveDisplay(
-                        questionData: mainQuestionData,
-                        leftIndent: 16.0,
-                        displayNoWithPrefix: "풀이$typeForAnswerArea",
-                        questionTypeToDisplay: "",
-                        showQuestionText: false,
-                        getControllers: getControllersForQuestion, // REVISED
-                        onCheckAnswer: checkAnswer,
-                        onTryAgain: tryAgain,
-                        submissionStatus: submissionStatus[uniqueId],
-                        userSubmittedAnswers: userSubmittedAnswers[uniqueId], // REVISED
-                      ),
-                      // ==========================================================
-                      Builder(builder: (context) {
-                        List<Widget> subWidgets = [];
-                        final dynamic subQuestionsField = mainQuestionData['sub_questions'];
-                        if (subQuestionsField is Map<String, dynamic> && subQuestionsField.isNotEmpty) {
-                          if (mainQuestionData.containsKey('answer') || (mainQuestionData['type'] != "발문" && subQuestionsField.isNotEmpty)) {
-                            subWidgets.add(const Divider(height: 12, thickness: 0.5, indent: 16, endIndent: 16));
-                          }
-
-                          List<String> sortedSubKeys = subQuestionsField.keys.toList()..sort((a, b) => (int.tryParse(a) ?? 99999).compareTo(int.tryParse(b) ?? 99999));
-                          int subOrderCounter = 0;
-                          for (String subKey in sortedSubKeys) {
-                            final dynamic subQuestionValue = subQuestionsField[subKey];
-                            if (subQuestionValue is Map<String, dynamic>) {
-                              subOrderCounter++;
-                              final String subType = subQuestionValue['type'] as String? ?? '';
-                              // ===================[수정된 위젯 호출 2]===================
-                              subWidgets.add(QuestionInteractiveDisplay(
-                                questionData: subQuestionValue,
-                                leftIndent: 24.0,
-                                displayNoWithPrefix: "($subOrderCounter)",
-                                questionTypeToDisplay: (subType == "발문" || subType.isEmpty) ? "" : " ($subType)",
-                                showQuestionText: true,
-                                getControllers: getControllersForQuestion, // REVISED
-                                onCheckAnswer: checkAnswer,
-                                onTryAgain: tryAgain,
-                                submissionStatus: submissionStatus[subQuestionValue['uniqueDisplayId']],
-                                userSubmittedAnswers: userSubmittedAnswers[subQuestionValue['uniqueDisplayId']], // REVISED
-                              ));
-                              // ==========================================================
-
-                              final dynamic subSubQuestionsField = subQuestionValue['sub_sub_questions'];
-                              if (subSubQuestionsField is Map<String, dynamic> && subSubQuestionsField.isNotEmpty) {
-                                List<String> sortedSubSubKeys = subSubQuestionsField.keys.toList()..sort((a,b) => (int.tryParse(a) ?? 99999).compareTo(int.tryParse(b) ?? 99999));
-                                int subSubOrderCounter = 0;
-                                for (String subSubKey in sortedSubSubKeys) {
-                                  final dynamic subSubQValue = subSubQuestionsField[subSubKey];
-                                  if (subSubQValue is Map<String, dynamic>) {
-                                    subSubOrderCounter++;
-                                    final String subSubType = subSubQValue['type'] as String? ?? '';
-                                    // ===================[수정된 위젯 호출 3]===================
-                                    subWidgets.add(QuestionInteractiveDisplay(
-                                      questionData: subSubQValue,
-                                      leftIndent: 32.0,
-                                      displayNoWithPrefix: " - ($subSubOrderCounter)",
-                                      questionTypeToDisplay: (subSubType == "발문" || subSubType.isEmpty) ? "" : " ($subSubType)",
-                                      showQuestionText: true,
-                                      getControllers: getControllersForQuestion, // REVISED
-                                      onCheckAnswer: checkAnswer,
-                                      onTryAgain: tryAgain,
-                                      submissionStatus: submissionStatus[subSubQValue['uniqueDisplayId']],
-                                      userSubmittedAnswers: userSubmittedAnswers[subSubQValue['uniqueDisplayId']], // REVISED
-                                    ));
-                                    // ==========================================================
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                        if (subWidgets.isEmpty && mainQuestionData['type'] == "발문" && !mainQuestionData.containsKey('answer')) {
-                          return const Padding(padding: EdgeInsets.all(16.0), child: Text("하위 문제가 없습니다.", style: TextStyle(fontStyle: FontStyle.italic)));
-                        }
-                        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: subWidgets);
-                      }),
-                    ],
-                  ),
-                );
-              },
-            )
-          ),
+          Expanded(child: _buildBody()),
         ],
       ),
     );
