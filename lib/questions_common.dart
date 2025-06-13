@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:collection/collection.dart';
 import 'studydataupdater.dart';
-import 'openaigraderservice.dart';
 
 /// 문자열이 null이거나 비어있는지 확인하는 확장 함수
 extension StringNullOrEmptyExtension on String? {
@@ -15,10 +14,6 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
   final Map<String, List<TextEditingController>> controllers = {};
   final Map<String, bool?> submissionStatus = {};
   final Map<String, List<String>> userSubmittedAnswers = {};
-
-  // [추가] AI 채점기와 결과 저장용 Map
-  final OpenAiGraderService _graderService = OpenAiGraderService();
-  final Map<String, GradingResult> aiGradingResults = {};
 
   // 각 State 클래스에서 자신의 질문 목록을 반환하도록 강제
   List<Map<String, dynamic>> get questions;
@@ -54,7 +49,6 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
       });
       submissionStatus.clear();
       userSubmittedAnswers.clear();
-      aiGradingResults.clear(); // [추가] AI 채점 결과도 초기화
       clearQuestionsList();
     });
   }
@@ -87,81 +81,43 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
 
   /// REVISED: 순서와 상관없이, 중복 입력을 허용하지 않는 Set 기반 정답 확인
   /// REVISED: 'N개 중 M개만 맞히면 정답' 시나리오를 처리하는 채점 로직
-  Future<void> checkAnswer(Map<String, dynamic> questionData) async {
+  void checkAnswer(Map<String, dynamic> questionData) {
     final String uniqueDisplayId = questionData['uniqueDisplayId'] as String;
-    final answerControllers = controllers[uniqueDisplayId] ?? [];
-    if (answerControllers.isEmpty || answerControllers.first.text.isNullOrEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("답을 입력해주세요.")));
-      return;
+
+    // isShufflable 값은 이제 '필요한 정답 개수'를 의미
+    final int requiredAnswerCount = questionData['isShufflable'] as int? ?? 1;
+    final dynamic answerValue = questionData['answer'];
+
+    List<String> correctAnswers = [];
+    if (answerValue is List) {
+      correctAnswers = answerValue.map((e) => e.toString().trim()).toList();
+    } else if (answerValue is String) {
+      correctAnswers = [answerValue.trim()];
     }
 
-    // 채점 시작 전, UI에 로딩 상태를 알리고 싶다면 여기서 상태 변경 가능
-    // setState(() { submissionStatus[uniqueDisplayId] = null; }); // 예시: 로딩 상태
+    final List<TextEditingController> answerControllers = controllers[uniqueDisplayId] ?? [];
+    if (correctAnswers.isEmpty || answerControllers.isEmpty) return;
 
-    bool overallCorrect;
     List<String> userAnswers = answerControllers.map((c) => c.text).toList();
 
-    // [분기 시작] 문제 유형에 따라 채점 방식 변경
-    if (questionData['type'] == '서술형') {
-      // --- AI 채점 로직 (서술형 문제) ---
-      final userAnswer = userAnswers.first; // 서술형은 첫 번째 답변만 사용
-      final modelAnswer = questionData['answer'] as String? ?? '';
-      final questionText = questionData['question'] as String? ?? '';
-      final fullScore = (questionData['fullscore'] as num?)?.toInt() ?? 10;
+    // Set으로 변환하여 순서와 중복 문제를 해결
+    final correctSet = correctAnswers.map((e) => e.toLowerCase()).toSet();
+    final userSet = userAnswers.map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toSet();
 
-      final result = await _graderService.gradeAnswer(
-        question: questionText,
-        modelAnswer: modelAnswer,
-        userAnswer: userAnswer,
-        fullScore: fullScore,
-      );
+    bool overallCorrect;
 
-      overallCorrect = result.isCorrect;
-
-      if (mounted) {
-        setState(() {
-          aiGradingResults[uniqueDisplayId] = result; // AI 채점 결과 저장
-        });
-      }
-
-      FirestoreService.saveQuestionAttempt(
-        questionData: questionData,
-        userAnswer: userAnswer,
-        isCorrect: overallCorrect,
-        score: result.score, // AI가 채점한 점수 저장
-        feedback: result.explanation, // AI의 채점 근거 저장
-      );
-
-    } else {
-      // --- 기존 채점 로직 (단답형, 계산형 등) ---
-      final int requiredAnswerCount = questionData['isShufflable'] as int? ?? 1;
-      final dynamic answerValue = questionData['answer'];
-
-      List<String> correctAnswers = [];
-      if (answerValue is List) {
-        correctAnswers = answerValue.map((e) => e.toString().trim()).toList();
-      } else if (answerValue is String) {
-        correctAnswers = [answerValue.trim()];
-      }
-
-      if (correctAnswers.isEmpty) return;
-
-      final correctSet = correctAnswers.map((e) => e.toLowerCase()).toSet();
-      final userSet = userAnswers.map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toSet();
-
-      if (requiredAnswerCount < correctSet.length) {
-        overallCorrect = (userSet.length == requiredAnswerCount) && userSet.every((e) => correctSet.contains(e));
-      } else {
-        overallCorrect = const SetEquality().equals(correctSet, userSet);
-      }
-
-      FirestoreService.saveQuestionAttempt(
-        questionData: questionData,
-        userAnswer: userAnswers.join(' || '),
-        isCorrect: overallCorrect,
-        // 기존 로직에서는 fullscore를 isCorrect일 때만 부여
-        score: overallCorrect ? (questionData['fullscore'] as num?)?.toInt() ?? 0 : 0,
-      );
+    // NOTE: 새로운 채점 로직 분기
+    // 시나리오 1: '부분 정답' 문제 (예: 5개 중 3개만 입력)
+    if (requiredAnswerCount < correctSet.length) {
+      // 1. 사용자가 입력한 유효 답안의 개수가 요구된 개수와 정확히 일치하고
+      // 2. 사용자가 입력한 모든 답이 실제 정답 Set의 부분집합인가? (즉, 모두 정답 목록에 있는가?)
+      overallCorrect =
+          (userSet.length == requiredAnswerCount) &&
+          userSet.every((e) => correctSet.contains(e));
+    }
+    // 시나리오 2: '일반' 문제 (모든 정답을 다 입력해야 함)
+    else {
+      overallCorrect = const SetEquality().equals(correctSet, userSet);
     }
 
     if (mounted) {
@@ -170,6 +126,12 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
         submissionStatus[uniqueDisplayId] = overallCorrect;
       });
     }
+
+    FirestoreService.saveQuestionAttempt(
+      questionData: questionData,
+      userAnswer: userAnswers.join(' || '),
+      isCorrect: overallCorrect,
+    );
   }
 
   void tryAgain(String uniqueDisplayId) {
@@ -178,7 +140,6 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
         controllers[uniqueDisplayId]?.forEach((controller) => controller.clear());
         submissionStatus.remove(uniqueDisplayId);
         userSubmittedAnswers.remove(uniqueDisplayId);
-        aiGradingResults.remove(uniqueDisplayId);
       });
     }
   }
@@ -198,8 +159,6 @@ class QuestionInteractiveDisplay extends StatefulWidget {
   final bool? submissionStatus;
   final List<String>? userSubmittedAnswers;
 
-  final Map<String, GradingResult>? aiGradingResults;
-
   const QuestionInteractiveDisplay({
     super.key,
     required this.questionData,
@@ -212,7 +171,6 @@ class QuestionInteractiveDisplay extends StatefulWidget {
     required this.onTryAgain,
     required this.submissionStatus,
     required this.userSubmittedAnswers,
-    this.aiGradingResults,
   });
 
   @override
@@ -325,46 +283,18 @@ class _QuestionInteractiveDisplayState extends State<QuestionInteractiveDisplay>
             ),
             if (currentSubmissionStatus != null) ...[
               const SizedBox(height: 8),
-              if (actualQuestionType == "서술형") ...[
-                // --- AI 채점 결과 표시 (서술형) ---
-                Builder(
-                    builder: (context) {
-                      final result = widget.aiGradingResults?[uniqueDisplayId];
-                      if (result == null) return const Text('AI 채점 결과를 불러오는 중...');
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'AI 채점 결과: ${result.score}점 / ${widget.questionData['fullscore'] ?? 10}점',
-                            style: TextStyle(
-                                color: result.isCorrect ? Colors.green : Colors.orange,
-                                fontWeight: FontWeight.bold
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text('입력한 답안: ${userSubmittedAnswersForDisplay?.first ?? ''}'),
-                          const SizedBox(height: 4),
-                          Text('채점 근거: ${result.explanation}'),
-                        ],
-                      );
-                    }
-                )
-              ] else ...[
-                // --- 기존 정답/오답 표시 (단답형 등) ---
-                Text(
-                  currentSubmissionStatus == true ? '정답입니다! 👍' : '오답입니다. 👎',
-                  style: TextStyle(color: currentSubmissionStatus == true ? Colors.green : Colors.red, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                for (int i=0; i < correctAnswers.length; i++)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 8.0, top: 2.0),
-                    child: Text(
-                        "(${i + 1}) 입력: ${userSubmittedAnswersForDisplay != null && i < userSubmittedAnswersForDisplay.length ? userSubmittedAnswersForDisplay[i] : '미입력'} / 정답: ${correctAnswers[i]}"
-                    ),
+              Text(
+                currentSubmissionStatus == true ? '정답입니다! 👍' : '오답입니다. 👎',
+                style: TextStyle(color: currentSubmissionStatus == true ? Colors.green : Colors.red, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              for (int i=0; i < correctAnswers.length; i++)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0, top: 2.0),
+                  child: Text(
+                      "(${i + 1}) 입력: ${userSubmittedAnswersForDisplay != null && i < userSubmittedAnswersForDisplay.length ? userSubmittedAnswersForDisplay[i] : '미입력'} / 정답: ${correctAnswers[i]}"
                   ),
-              ],
+                ),
             ],
           ]
           else if (correctAnswers.isNotEmpty && actualQuestionType != "발문")

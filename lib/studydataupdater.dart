@@ -9,8 +9,6 @@ class FirestoreService {
     required Map<String, dynamic> questionData,
     required String userAnswer,
     required bool isCorrect,
-    int? score,
-    String? feedback,
   }) async {
     final User? currentUser = _auth.currentUser;
     if (currentUser == null) {
@@ -34,8 +32,6 @@ class FirestoreService {
 
       // REVISED: 다시 풀기 기능을 위해 문제의 전체 데이터를 저장합니다.
       'fullQuestionData': questionData,
-      'score': score,
-      'feedback': feedback,
     };
 
     try {

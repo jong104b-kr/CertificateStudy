@@ -152,11 +152,10 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
     return QuestionListView(
       questions: _randomlySelectedQuestions,
       getControllers: getControllersForQuestion,
-      onCheckAnswer: (data) => checkAnswer(data),
+      onCheckAnswer: checkAnswer,
       onTryAgain: tryAgain,
       submissionStatus: submissionStatus,
       userSubmittedAnswers: userSubmittedAnswers,
-      aiGradingResults: aiGradingResults, // [추가] AI 채점 결과 전달
       titleBuilder: (context, questionData, index) {
         final pageOrderNo = "${index + 1}";
         final originalNo = questionData['no'] as String?;
