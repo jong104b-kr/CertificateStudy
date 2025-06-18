@@ -41,13 +41,18 @@ class QuestionListView extends StatelessWidget {
         final uniqueId = mainQuestionData['uniqueDisplayId'] as String;
         final type = mainQuestionData['type'] as String? ?? '';
 
+        final subQuestionsField = mainQuestionData['sub_questions'];
+        final bool hasSubQuestions = subQuestionsField is Map<String, dynamic> && subQuestionsField.isNotEmpty;
+
         final List<Widget> expansionTileChildren = [
           const Divider(height: 1, thickness: 1),
           QuestionInteractiveDisplay(
             questionData: mainQuestionData,
             leftIndent: 16.0,
             displayNoWithPrefix: "풀이",
-            questionTypeToDisplay: (type == "발문" || type.isEmpty) ? "" : " ($type)",
+            questionTypeToDisplay: hasSubQuestions
+                ? ""
+                : ((type == "발문" || type.isEmpty) ? "" : " ($type)"),
             showQuestionText: false,
             getControllers: getControllers,
             onCheckAnswer: onCheckAnswer,
@@ -58,8 +63,7 @@ class QuestionListView extends StatelessWidget {
         ];
 
         // 하위 문제 (sub_questions) 처리
-        final subQuestionsField = mainQuestionData['sub_questions'];
-        if (subQuestionsField is Map<String, dynamic> && subQuestionsField.isNotEmpty) {
+        if (hasSubQuestions) {
           List<String> sortedSubKeys = subQuestionsField.keys.toList()
             ..sort((a, b) => (int.tryParse(a) ?? 99999).compareTo(int.tryParse(b) ?? 99999));
           int subOrderCounter = 0;

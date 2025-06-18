@@ -229,7 +229,7 @@ class _QuestionInteractiveDisplayState extends State<QuestionInteractiveDisplay>
             Padding(
               padding: EdgeInsets.only(bottom: (isAnswerable ? 4.0 : 0)),
               child: Text(
-                widget.displayNoWithPrefix,
+                '${widget.displayNoWithPrefix}${widget.questionTypeToDisplay}',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.blueGrey[700]),
               ),
             ),
