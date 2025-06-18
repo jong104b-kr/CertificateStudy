@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'questions_common.dart';
+import 'openaigraderservice.dart';
 
 /// 문제 목록을 표시하는 공통 ListView 위젯
 class QuestionListView extends StatelessWidget {
@@ -12,6 +13,9 @@ class QuestionListView extends StatelessWidget {
   final void Function(String) onTryAgain;
   final Map<String, bool?> submissionStatus;
   final Map<String, List<String>> userSubmittedAnswers;
+
+  /// AI 채점 결과를 받을 변수 선언
+  final Map<String, GradingResult>? aiGradingResults;
 
   /// 각 페이지의 특성에 맞게 UI를 커스터마이징하기 위한 빌더 함수들
   final Widget Function(BuildContext context, Map<String, dynamic> questionData, int index) titleBuilder;
@@ -29,6 +33,7 @@ class QuestionListView extends StatelessWidget {
     required this.titleBuilder,
     this.subtitleBuilder,
     this.leadingBuilder,
+    this.aiGradingResults,
   });
 
   @override
@@ -59,6 +64,7 @@ class QuestionListView extends StatelessWidget {
             onTryAgain: onTryAgain,
             submissionStatus: submissionStatus[uniqueId],
             userSubmittedAnswers: userSubmittedAnswers[uniqueId],
+            aiGradingResults: aiGradingResults, //
           ),
         ];
 
@@ -83,6 +89,7 @@ class QuestionListView extends StatelessWidget {
                 onTryAgain: onTryAgain,
                 submissionStatus: submissionStatus[subQuestionValue['uniqueDisplayId']],
                 userSubmittedAnswers: userSubmittedAnswers[subQuestionValue['uniqueDisplayId']],
+                aiGradingResults: aiGradingResults,
               ));
 
               // NEW: 하위-하위 문제 (sub_sub_questions) 처리 로직 추가
@@ -107,6 +114,7 @@ class QuestionListView extends StatelessWidget {
                       onTryAgain: onTryAgain,
                       submissionStatus: submissionStatus[subSubQValue['uniqueDisplayId']],
                       userSubmittedAnswers: userSubmittedAnswers[subSubQValue['uniqueDisplayId']],
+                      aiGradingResults: aiGradingResults, // [수정] 3. 하위-하위 문제에 전달
                     ));
                   }
                 }

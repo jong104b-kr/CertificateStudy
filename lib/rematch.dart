@@ -98,10 +98,11 @@ class _RematchPageState extends State<RematchPage> with QuestionStateMixin<Remat
     return QuestionListView(
       questions: _rematchQuestions,
       getControllers: getControllersForQuestion,
-      onCheckAnswer: checkAnswer,
+      onCheckAnswer: (data) => checkAnswer(data),
       onTryAgain: tryAgain,
       submissionStatus: submissionStatus,
       userSubmittedAnswers: userSubmittedAnswers,
+      aiGradingResults: aiGradingResults,
 
       // 1. leadingBuilder: 이제 자신의 역할인 아이콘 생성만 담당
       leadingBuilder: (context, questionData, index) {
