@@ -249,7 +249,7 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
     return QuestionListView(
       questions: _questions,
       getControllers: getControllersForQuestion,
-      onCheckAnswer: (data) => checkAnswer(data),
+      onCheckAnswer: (questionData, parentData) => checkAnswer(questionData, parentData),
       onTryAgain: tryAgain,
       submissionStatus: submissionStatus,
       userSubmittedAnswers: userSubmittedAnswers,

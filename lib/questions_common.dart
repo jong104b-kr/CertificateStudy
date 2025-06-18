@@ -87,7 +87,7 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
 
   /// REVISED: 순서와 상관없이, 중복 입력을 허용하지 않는 Set 기반 정답 확인
   /// REVISED: 'N개 중 M개만 맞히면 정답' 시나리오를 처리하는 채점 로직
-  Future<void> checkAnswer(Map<String, dynamic> questionData) async {
+  Future<void> checkAnswer(Map<String, dynamic> questionData, Map<String, dynamic>? parentData) async {
     final String uniqueDisplayId = questionData['uniqueDisplayId'] as String;
     final answerControllers = controllers[uniqueDisplayId] ?? [];
     if (answerControllers.isEmpty || answerControllers.first.text.isNullOrEmpty) {
@@ -107,6 +107,11 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
       final userAnswer = userAnswers.first; // 서술형은 첫 번째 답변만 사용
       final modelAnswer = questionData['answer'] as String? ?? '';
       final questionText = questionData['question'] as String? ?? '';
+      num? scoreValue = questionData['fullscore'];
+      // 현재 문제에 fullscore가 없고 부모 데이터가 있으면 부모의 fullscore를 사용
+      if (scoreValue == null && parentData != null) {
+        scoreValue = parentData['fullscore'];
+      }
       final fullScore = (questionData['fullscore'] as num?)?.toInt() ?? 10;
 
       final result = await _graderService.gradeAnswer(
@@ -193,7 +198,8 @@ class QuestionInteractiveDisplay extends StatefulWidget {
   final bool showQuestionText;
 
   final List<TextEditingController> Function(String, int) getControllers;
-  final void Function(Map<String, dynamic>) onCheckAnswer;
+  final void Function(Map<String, dynamic>, Map<String, dynamic>?) onCheckAnswer;
+  final Map<String, dynamic>? parentQuestionData;
   final void Function(String) onTryAgain;
   final bool? submissionStatus;
   final List<String>? userSubmittedAnswers;
@@ -209,6 +215,7 @@ class QuestionInteractiveDisplay extends StatefulWidget {
     required this.showQuestionText,
     required this.getControllers,
     required this.onCheckAnswer,
+    this.parentQuestionData,
     required this.onTryAgain,
     required this.submissionStatus,
     required this.userSubmittedAnswers,
@@ -298,7 +305,7 @@ class _QuestionInteractiveDisplayState extends State<QuestionInteractiveDisplay>
                             contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                           ),
                           onChanged: (text) { if (currentSubmissionStatus == null) setState(() {}); },
-                          onSubmitted: (value) { if (currentSubmissionStatus == null) widget.onCheckAnswer(widget.questionData); },
+                          onSubmitted: (value) { if (currentSubmissionStatus == null) widget.onCheckAnswer(widget.questionData, widget.parentQuestionData); },
                           maxLines: actualQuestionType == "서술형" ? null : 1,
                           keyboardType: actualQuestionType == "서술형" ? TextInputType.multiline : TextInputType.text,
                         ),
@@ -313,7 +320,7 @@ class _QuestionInteractiveDisplayState extends State<QuestionInteractiveDisplay>
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
                 ElevatedButton(
-                  onPressed: currentSubmissionStatus == null ? () { FocusScope.of(context).unfocus(); widget.onCheckAnswer(widget.questionData); } : null,
+                  onPressed: currentSubmissionStatus == null ? () { FocusScope.of(context).unfocus(); widget.onCheckAnswer(widget.questionData, widget.parentQuestionData); } : null,
                   child: Text(currentSubmissionStatus == null ? '정답 확인' : '채점 완료'),
                   style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), textStyle: const TextStyle(fontSize: 13)),
                 ),
@@ -332,11 +339,18 @@ class _QuestionInteractiveDisplayState extends State<QuestionInteractiveDisplay>
                       final result = widget.aiGradingResults?[uniqueDisplayId];
                       if (result == null) return const Text('AI 채점 결과를 불러오는 중...');
 
+                      // [수정] 만점(maxScore) 계산 로직 추가
+                      num? scoreValue = widget.questionData['fullscore'];
+                      if (scoreValue == null && widget.parentQuestionData != null) {
+                        scoreValue = widget.parentQuestionData!['fullscore'];
+                      }
+                      final int maxScore = (scoreValue)?.toInt() ?? 10;
+
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'AI 채점 결과: ${result.score}점 / ${widget.questionData['fullscore'] ?? 10}점',
+                            'AI 채점 결과: ${result.score}점 / $maxScore점',
                             style: TextStyle(
                                 color: result.isCorrect ? Colors.green : Colors.orange,
                                 fontWeight: FontWeight.bold

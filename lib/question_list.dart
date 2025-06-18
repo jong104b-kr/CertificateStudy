@@ -9,7 +9,7 @@ class QuestionListView extends StatelessWidget {
 
   /// Mixin으로부터 전달받는 콜백 함수 및 상태
   final List<TextEditingController> Function(String, int) getControllers;
-  final void Function(Map<String, dynamic>) onCheckAnswer;
+  final void Function(Map<String, dynamic>, Map<String, dynamic>?) onCheckAnswer;
   final void Function(String) onTryAgain;
   final Map<String, bool?> submissionStatus;
   final Map<String, List<String>> userSubmittedAnswers;
@@ -61,6 +61,7 @@ class QuestionListView extends StatelessWidget {
             showQuestionText: false,
             getControllers: getControllers,
             onCheckAnswer: onCheckAnswer,
+            parentQuestionData: null, // [수정] 최상위 문제이므로 부모는 null
             onTryAgain: onTryAgain,
             submissionStatus: submissionStatus[uniqueId],
             userSubmittedAnswers: userSubmittedAnswers[uniqueId],
@@ -69,7 +70,7 @@ class QuestionListView extends StatelessWidget {
         ];
 
         // 하위 문제 (sub_questions) 처리
-        if (hasSubQuestions) {
+        if (subQuestionsField is Map<String, dynamic> && subQuestionsField.isNotEmpty) {
           List<String> sortedSubKeys = subQuestionsField.keys.toList()
             ..sort((a, b) => (int.tryParse(a) ?? 99999).compareTo(int.tryParse(b) ?? 99999));
           int subOrderCounter = 0;
@@ -86,6 +87,7 @@ class QuestionListView extends StatelessWidget {
                 showQuestionText: true,
                 getControllers: getControllers,
                 onCheckAnswer: onCheckAnswer,
+                parentQuestionData: mainQuestionData,
                 onTryAgain: onTryAgain,
                 submissionStatus: submissionStatus[subQuestionValue['uniqueDisplayId']],
                 userSubmittedAnswers: userSubmittedAnswers[subQuestionValue['uniqueDisplayId']],
@@ -111,6 +113,7 @@ class QuestionListView extends StatelessWidget {
                       showQuestionText: true,
                       getControllers: getControllers,
                       onCheckAnswer: onCheckAnswer,
+                      parentQuestionData: mainQuestionData,
                       onTryAgain: onTryAgain,
                       submissionStatus: submissionStatus[subSubQValue['uniqueDisplayId']],
                       userSubmittedAnswers: userSubmittedAnswers[subSubQValue['uniqueDisplayId']],

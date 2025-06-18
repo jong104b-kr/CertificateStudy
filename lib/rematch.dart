@@ -98,7 +98,7 @@ class _RematchPageState extends State<RematchPage> with QuestionStateMixin<Remat
     return QuestionListView(
       questions: _rematchQuestions,
       getControllers: getControllersForQuestion,
-      onCheckAnswer: (data) => checkAnswer(data),
+      onCheckAnswer: (questionData, parentData) => checkAnswer(questionData, parentData),
       onTryAgain: tryAgain,
       submissionStatus: submissionStatus,
       userSubmittedAnswers: userSubmittedAnswers,

@@ -218,7 +218,7 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
     return QuestionListView(
       questions: _randomlySelectedQuestions,
       getControllers: getControllersForQuestion,
-      onCheckAnswer: (data) => checkAnswer(data),
+      onCheckAnswer: (questionData, parentData) => checkAnswer(questionData, parentData),
       onTryAgain: tryAgain,
       submissionStatus: submissionStatus,
       userSubmittedAnswers: userSubmittedAnswers,
