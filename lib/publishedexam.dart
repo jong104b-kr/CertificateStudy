@@ -167,7 +167,75 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
     }
   }
 
-  // 4. 복잡했던 위젯 빌드 함수는 모두 삭제됨
+  // 3. 채점 관련 메서드
+
+  // 사용자가 맞춘 문제의 총점을 계산하는 메서드
+  int _calculateUserScore() {
+    int totalScore = 0;
+    // QuestionStateMixin의 submissionStatus를 사용
+    for (int i = 0; i < _questions.length; i++) {
+      // 1. 현재 인덱스에 해당하는 문제 데이터를 가져옵니다.
+      final questionData = _questions[i];
+      // 2. 해당 문제의 고유 ID(key로 사용될 값)를 가져옵니다.
+      final String? uniqueId = questionData['uniqueDisplayId'] as String?;
+
+      // uniqueId가 있고, 해당 ID로 submissionStatus 맵을 조회했을 때 결과가 true이면 정답으로 처리합니다.
+      if (uniqueId != null && submissionStatus[uniqueId] == true) {
+        final score = questionData['fullscore']; // fullscore 값 가져오기
+
+        // 점수 타입에 따라 안전하게 더하기
+        if (score is int) {
+          totalScore += score;
+        } else if (score is String) {
+          totalScore += int.tryParse(score) ?? 0;
+        }
+      }
+    }
+    return totalScore;
+  }
+
+  // 시험지의 총점을 계산하는 메서드
+  int _calculateMaxScore() {
+    int maxScore = 0;
+    for (final questionData in _questions) {
+      final score = questionData['fullscore'];
+      if (score is int) {
+        maxScore += score;
+      } else if (score is String) {
+        maxScore += int.tryParse(score) ?? 0;
+      }
+    }
+    return maxScore;
+  }
+
+  // 채점 결과를 다이얼로그로 보여주는 메서드
+  void _showGradingResult() {
+    final int userScore = _calculateUserScore();
+    final int maxScore = _calculateMaxScore();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('💯 채점 결과'),
+          content: Text(
+            '총점: $maxScore점\n획득 점수: $userScore점',
+            style: const TextStyle(fontSize: 16, height: 1.5),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('확인'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // 5. 복잡했던 위젯 빌드 함수는 모두 삭제됨
 
   Widget _buildBody() {
     if (_isLoadingQuestions) return const Center(child: CircularProgressIndicator());
@@ -248,6 +316,14 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
           Expanded(child: _buildBody()),
         ],
       ),
+      floatingActionButton: _questions.isNotEmpty
+          ? FloatingActionButton.extended(
+        onPressed: _showGradingResult, // 버튼 클릭 시 채점 결과 표시
+        label: const Text('채점하기'),
+        icon: const Icon(Icons.check_circle_outline),
+        tooltip: '지금까지 푼 문제 채점하기',
+      )
+          : null, // 문제가 없으면 버튼을 표시하지 않음
     );
   }
 }
