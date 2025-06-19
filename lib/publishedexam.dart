@@ -167,128 +167,7 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
     }
   }
 
-  // 4. 특정 문제 데이터 아래의 모든 최하위 문제(채점 대상)들을 재귀적으로 찾아 리스트로 반환합니다.
-  List<Map<String, dynamic>> _getAllLeafNodes(Map<String, dynamic> questionData) {
-    final List<Map<String, dynamic>> leaves = [];
-
-    final bool hasSubQuestions = questionData.containsKey('sub_questions') && questionData['sub_questions'] is Map && (questionData['sub_questions'] as Map).isNotEmpty;
-    final bool hasSubSubQuestions = questionData.containsKey('sub_sub_questions') && questionData['sub_sub_questions'] is Map && (questionData['sub_sub_questions'] as Map).isNotEmpty;
-
-    if (!hasSubQuestions && !hasSubSubQuestions) {
-      // 자식이 없으면 자기 자신이 최하위 문제(leaf)입니다.
-      // 단, 채점 가능한 유형(예: fullscore가 있는 문제)만 추가하는 것이 좋습니다.
-      if (questionData.containsKey('fullscore')) {
-        leaves.add(questionData);
-      }
-    } else {
-      // 자식이 있으면 자식들을 따라 재귀적으로 탐색합니다.
-      if (hasSubQuestions) {
-        final subMap = questionData['sub_questions'] as Map<String, dynamic>;
-        for (final subQuestion in subMap.values.whereType<Map<String, dynamic>>()) {
-          leaves.addAll(_getAllLeafNodes(subQuestion));
-        }
-      }
-      if (hasSubSubQuestions) {
-        final subSubMap = questionData['sub_sub_questions'] as Map<String, dynamic>;
-        for (final subSubQuestion in subSubMap.values.whereType<Map<String, dynamic>>()) {
-          leaves.addAll(_getAllLeafNodes(subSubQuestion));
-        }
-      }
-    }
-    return leaves;
-  }
-
-  // 5. 채점 관련 메서드
-
-  int _calculateUserScore() {
-    int totalScore = 0;
-    // `questions` getter를 통해 각 페이지의 문제 목록을 가져옵니다.
-    for (final questionData in questions) {
-      final bool hasChildren = (questionData.containsKey('sub_questions') && (questionData['sub_questions'] as Map).isNotEmpty) ||
-          (questionData.containsKey('sub_sub_questions') && (questionData['sub_sub_questions'] as Map).isNotEmpty);
-
-      if (hasChildren) {
-        // --- 컨테이너 문제 채점 로직 ---
-        final List<Map<String, dynamic>> leafChildren = _getAllLeafNodes(questionData);
-        if (leafChildren.isEmpty) continue; // 채점할 하위 문제가 없으면 건너뜀
-
-        bool allChildrenCorrect = true;
-        int partialScore = 0;
-
-        for (final leaf in leafChildren) {
-          final uniqueId = leaf['uniqueDisplayId'] as String?;
-          if (uniqueId != null && submissionStatus[uniqueId] == true) {
-            // 맞힌 문제의 점수를 부분 점수에 더해놓습니다.
-            final score = leaf['fullscore'];
-            partialScore += (score is int ? score : int.tryParse(score.toString()) ?? 0);
-          } else {
-            // 하나라도 틀리거나 안 푼 문제가 있으면 '모두 정답' 플래그를 false로 설정합니다.
-            allChildrenCorrect = false;
-          }
-        }
-
-        if (allChildrenCorrect) {
-          // 모든 하위 문제를 맞혔다면, 상위 문제(컨테이너)의 fullscore를 부여합니다.
-          final parentScore = questionData['fullscore'];
-          totalScore += (parentScore is int ? parentScore : int.tryParse(parentScore.toString()) ?? 0);
-        } else {
-          // 일부만 맞혔다면, 맞힌 문제들의 점수 합(partialScore)을 부여합니다.
-          totalScore += partialScore;
-        }
-
-      } else {
-        // --- 독립 문제 채점 로직 ---
-        final uniqueId = questionData['uniqueDisplayId'] as String?;
-        if (uniqueId != null && submissionStatus[uniqueId] == true && questionData.containsKey('fullscore')) {
-          final score = questionData['fullscore'];
-          totalScore += (score is int ? score : int.tryParse(score.toString()) ?? 0);
-        }
-      }
-    }
-    return totalScore;
-  }
-
-  int _calculateMaxScore() {
-    int maxScore = 0;
-    // `questions` getter를 통해 각 페이지의 문제 목록을 가져옵니다.
-    for (final questionData in questions) {
-      // 컨테이너든 독립 문제든, 총점 계산 시에는 최상위 레벨 문제의 fullscore만 합산합니다.
-      // 이것이 '하위 문제 합이 상위 점수를 초과해도 상위 점수만 인정' 규칙과 일치합니다.
-      if (questionData.containsKey('fullscore')) {
-        final score = questionData['fullscore'];
-        maxScore += (score is int ? score : int.tryParse(score.toString()) ?? 0);
-      }
-    }
-    return maxScore;
-  }
-
-  void _showGradingResult() {
-    final int userScore = _calculateUserScore();
-    final int maxScore = _calculateMaxScore();
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('💯 채점 결과'),
-          content: Text(
-            '총점: $maxScore점\n획득 점수: $userScore점',
-            style: const TextStyle(fontSize: 16, height: 1.5),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('확인'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // 5. 복잡했던 위젯 빌드 함수는 모두 삭제됨
+  // 6. 복잡했던 위젯 빌드 함수는 모두 삭제됨
 
   Widget _buildBody() {
     if (_isLoadingQuestions) return const Center(child: CircularProgressIndicator());
@@ -372,7 +251,7 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
       ),
       floatingActionButton: _questions.isNotEmpty
           ? FloatingActionButton.extended(
-        onPressed: _showGradingResult, // 버튼 클릭 시 채점 결과 표시
+        onPressed: () => showGradingResult(context),
         label: const Text('채점하기'),
         icon: const Icon(Icons.check_circle_outline),
         tooltip: '지금까지 푼 문제 채점하기',
