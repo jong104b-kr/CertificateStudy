@@ -115,8 +115,10 @@ class _IncorrectNotePageState extends State<IncorrectNotePage> with QuestionStat
 
       // 2. titleBuilder: 아이콘 로직이 빠지고 제목 텍스트만 생성하여 간결해짐
       titleBuilder: (context, questionData, index) {
+        final originalAttempt = _attempts[index];
+        final sourceText = originalAttempt.sourceExamId;
         final originalNo = questionData['no'] as String?;
-        return Text('문제 ${index + 1} (원본 ${originalNo ?? "N/A"}번)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16));
+        return Text('문제 ${index + 1} (원본 $sourceText ${originalNo ?? "N/A"}번)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16));
       },
 
       // 3. subtitleBuilder: 기존과 동일

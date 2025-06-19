@@ -130,6 +130,9 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
     if (mounted) setState(() { _isLoadingQuestions = true; _errorMessage = ''; clearAllAttemptStatesAndQuestions(); });
 
     final String documentId = '$_selectedYear-$_selectedRound-$_selectedGrade';
+
+    setCurrentExamId(documentId);
+
     try {
       final docSnapshot = await _firestore.collection('exam').doc(documentId).get();
       if (!mounted) return;
@@ -157,6 +160,7 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
             return mainNoCompare != 0 ? mainNoCompare : parsedA[1].compareTo(parsedB[1]);
           });
           _questions = fetchedQuestions;
+          startTimer();
         } else { _errorMessage = '시험 문서($documentId) 데이터를 가져올 수 없습니다.'; }
       } else { _errorMessage = '선택한 조건의 시험 문서($documentId)를 찾을 수 없습니다.'; }
     } catch (e, s) {
@@ -251,7 +255,21 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
       ),
       floatingActionButton: _questions.isNotEmpty
           ? FloatingActionButton.extended(
-        onPressed: () => showGradingResult(context),
+        onPressed: () {
+          // 1. 현재 시각을 얻어옵니다.
+          // millisecondsSinceEpoch는 고유한 숫자값을 반환하여 ID로 쓰기에 매우 좋습니다.
+          final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+          // 2. 기존 examId 형식 뒤에 타임스탬프를 붙여 고유한 ID를 생성합니다.
+          final String uniqueExamId = '$_selectedYear-$_selectedRound-$_selectedGrade-$timestamp';
+
+          // 3. showGradingResult 함수에 새로 만든 고유 ID를 전달합니다.
+          showGradingResult(
+            context,
+            examId: uniqueExamId, // 수정된 부분
+            examTitle: '$_selectedYear년 $_selectedRound회차 $_selectedGrade 기출문제 시험 ($timestamp 응시)',
+          );
+        },
         label: const Text('채점하기'),
         icon: const Icon(Icons.check_circle_outline),
         tooltip: '지금까지 푼 문제 채점하기',

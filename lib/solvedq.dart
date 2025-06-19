@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'answers.dart';
 import 'incorrectnote.dart';
 import 'appbar.dart';
+import 'rematch.dart';
 
 class SolvedQuestionPage extends StatelessWidget {
   final String title; // 이전 페이지 제목을 받을 변수
@@ -44,7 +45,6 @@ class SolvedQuestionPage extends StatelessWidget {
               ),
             ],
           ),
-          /*
           ElevatedButton(
             onPressed: () {
               // RematchPage로 이동하면서 title 값을 전달
@@ -57,7 +57,6 @@ class SolvedQuestionPage extends StatelessWidget {
             },
             child: Text('다시 풀어보기'),
           ),
-          */
         ]
       ),
     );

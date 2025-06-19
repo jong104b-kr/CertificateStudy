@@ -139,7 +139,6 @@ class _AnswersPageState extends State<AnswersPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text("내 답안: ${attempt.userAnswer}", style: const TextStyle(fontSize: 14)),
-                          // REVISED: 변환된 문자열을 사용합니다.
                           Text("실제 정답: $displayableCorrectAnswer", style: const TextStyle(fontSize: 14, color: Colors.blue)),
                         ],
                       ),

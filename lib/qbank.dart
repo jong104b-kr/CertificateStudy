@@ -27,6 +27,7 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
   bool _isLoadingOptions = true;
   bool _isLoadingQuestions = false;
   String _errorMessage = '';
+  String? _sessionExamId;
 
   List<Map<String, dynamic>> _randomlySelectedQuestions = [];
 
@@ -95,6 +96,9 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
       return;
     }
     if (mounted) setState(() { _isLoadingQuestions = true; _errorMessage = ''; clearAllAttemptStatesAndQuestions(); });
+
+    _sessionExamId = '문제은행-$_selectedGrade-${DateTime.now().millisecondsSinceEpoch}';
+    setCurrentExamId(_sessionExamId!);
 
     List<Map<String, dynamic>> pooledMainQuestions = [];
     try {
@@ -213,7 +217,18 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
       ),
       floatingActionButton: _randomlySelectedQuestions.isNotEmpty
           ? FloatingActionButton.extended(
-        onPressed: () => showGradingResult(context),
+        onPressed: () {
+          // 1. 현재 시각을 얻어옵니다.
+          // millisecondsSinceEpoch는 고유한 숫자값을 반환하여 ID로 쓰기에 매우 좋습니다.
+          final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+
+          // 2. showGradingResult 함수에 새로 만든 고유 ID를 전달합니다.
+          showGradingResult(
+            context,
+            examId: _sessionExamId!, // 저장해둔 세션 ID 사용
+            examTitle: '문제은행 $_selectedGrade 시험 (${DateTime.now().toString().substring(5, 16)} 응시)',
+          );
+        },
         label: const Text('채점하기'),
         icon: const Icon(Icons.check_circle_outline),
         tooltip: '지금까지 푼 문제 채점하기',
