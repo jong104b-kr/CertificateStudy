@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'appbar.dart'; // 사용자 정의 AppBar (CSAppBar)
+import 'appbar.dart';
 import 'dart:async';
-import 'dart:math'; // 랜덤 선택
-import 'questions_common.dart'; // 공통 코드 임포트
+import 'dart:math';
+import 'questions_common.dart';
 import 'question_list.dart';
 
 class QuestionBankPage extends StatefulWidget {
@@ -14,7 +14,6 @@ class QuestionBankPage extends StatefulWidget {
   State<QuestionBankPage> createState() => _QuestionBankPageState();
 }
 
-// 1. QuestionStateMixin 적용
 class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateMixin<QuestionBankPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -31,24 +30,22 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
 
   List<Map<String, dynamic>> _randomlySelectedQuestions = [];
 
-  // 2. Mixin의 abstract 멤버 구현
   @override
   List<Map<String, dynamic>> get questions => _randomlySelectedQuestions;
 
   @override
   void clearQuestionsList() {
-    _randomlySelectedQuestions = [];
-    _errorMessage = '';
+    if(mounted) setState(() {
+      _randomlySelectedQuestions = [];
+      _errorMessage = '';
+    });
   }
 
-  // initState는 페이지 고유 로직이므로 유지
   @override
   void initState() {
     super.initState();
     _fetchAndParseAllDocumentIdsForOptions();
   }
-
-  // 3. 공통 메서드들(_getController, _clearAll, _dispose, _checkAnswer 등)은 모두 삭제됨
 
   Future<void> _fetchAndParseAllDocumentIdsForOptions() async {
     if (!mounted) return;
@@ -65,8 +62,6 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
           String grade = parts.last.trim();
           _parsedDocIds.add({'docId': doc.id, 'grade': grade});
           grades.add(grade);
-        } else {
-          print("Warning: Could not parse grade from doc ID: ${doc.id}");
         }
       }
       _gradeOptions = grades.toList()..sort();
@@ -109,8 +104,7 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
           if (docSnapshot.exists) {
             final docData = docSnapshot.data();
             if (docData != null) {
-              List<String> sortedMainKeys = docData.keys.toList()..sort((a, b) => (int.tryParse(a) ?? 99999).compareTo(int.tryParse(b) ?? 99999));
-              for (String mainKey in sortedMainKeys) {
+              for (String mainKey in docData.keys) {
                 var mainValue = docData[mainKey];
                 if (mainValue is Map<String, dynamic>) {
                   Map<String, dynamic> questionData = Map<String, dynamic>.from(mainValue);
@@ -118,7 +112,7 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
                   if (!questionData.containsKey('no') || (questionData['no'] as String?).isNullOrEmpty) {
                     questionData['no'] = mainKey;
                   }
-                  pooledMainQuestions.add(cleanNewlinesRecursive(questionData)); // Mixin의 메서드 사용
+                  pooledMainQuestions.add(cleanNewlinesRecursive(questionData));
                 }
               }
             }
@@ -127,14 +121,12 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
       }
 
       if (pooledMainQuestions.isNotEmpty) {
-        if (pooledMainQuestions.length <= _numberOfRandomQuestions!) {
-          _randomlySelectedQuestions = List.from(pooledMainQuestions);
-        } else {
-          final random = Random();
-          _randomlySelectedQuestions = List.generate(_numberOfRandomQuestions!, (_) {
-            return pooledMainQuestions.removeAt(random.nextInt(pooledMainQuestions.length));
-          });
-        }
+        final random = Random();
+        final tempList = List<Map<String, dynamic>>.from(pooledMainQuestions);
+        tempList.shuffle(random);
+        final countToTake = _numberOfRandomQuestions! < tempList.length ? _numberOfRandomQuestions! : tempList.length;
+        _randomlySelectedQuestions = tempList.sublist(0, countToTake);
+        if(mounted) setState(() => startTimer());
       } else { _errorMessage = "'$_selectedGrade' 등급에 해당하는 문제가 전체 시험 데이터에 없습니다."; }
     } catch (e, s) {
       _errorMessage = '문제 풀 구성 중 오류 발생.';
@@ -147,16 +139,15 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
   Widget _buildBody() {
     if (_isLoadingQuestions) return const Center(child: CircularProgressIndicator());
     if (_errorMessage.isNotEmpty && _randomlySelectedQuestions.isEmpty) return Center(child: Text(_errorMessage, style: const TextStyle(color: Colors.red)));
-    if (_randomlySelectedQuestions.isEmpty) return Center(child: Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Text(_selectedGrade == null ? '먼저 등급과 문제 수를 선택하고 시험지를 생성하세요.' : '선택한 등급의 문제가 없거나, 문제 수가 유효하지 않습니다.', textAlign: TextAlign.center),
+    if (_randomlySelectedQuestions.isEmpty) return const Center(child: Padding(
+      padding: EdgeInsets.all(16.0),
+      child: Text('등급과 문제 수를 선택하고 시험지를 생성하세요.', textAlign: TextAlign.center),
     ));
 
-    // REVISED: 공통 위젯 사용
     return QuestionListView(
       questions: _randomlySelectedQuestions,
       getControllers: getControllersForQuestion,
-      onCheckAnswer: (questionData, parentData) => checkAnswer(questionData, parentData),
+      onCheckAnswer: checkAnswer,
       onTryAgain: tryAgain,
       submissionStatus: submissionStatus,
       userSubmittedAnswers: userSubmittedAnswers,
@@ -175,8 +166,6 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
       },
     );
   }
-
-  // 6. 복잡했던 위젯 빌드 함수들(_buildQuestionHierarchyWidgets, _buildQuestionInteractiveDisplay)은 모두 삭제됨
 
   @override
   Widget build(BuildContext context) {
@@ -218,14 +207,10 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
       floatingActionButton: _randomlySelectedQuestions.isNotEmpty
           ? FloatingActionButton.extended(
         onPressed: () {
-          // 1. 현재 시각을 얻어옵니다.
-          // millisecondsSinceEpoch는 고유한 숫자값을 반환하여 ID로 쓰기에 매우 좋습니다.
-          final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-
-          // 2. showGradingResult 함수에 새로 만든 고유 ID를 전달합니다.
+          // Mixin에 있는 showGradingResult 함수를 직접 호출
           showGradingResult(
             context,
-            examId: _sessionExamId!, // 저장해둔 세션 ID 사용
+            examId: _sessionExamId!,
             examTitle: '문제은행 $_selectedGrade 시험 (${DateTime.now().toString().substring(5, 16)} 응시)',
           );
         },
@@ -233,7 +218,7 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
         icon: const Icon(Icons.check_circle_outline),
         tooltip: '지금까지 푼 문제 채점하기',
       )
-          : null, // 문제
+          : null,
     );
   }
 }

@@ -10,7 +10,7 @@ extension StringNullOrEmptyExtension on String? {
   bool get isNullOrEmpty => this == null || this!.trim().isEmpty;
 }
 
-/// 두 페이지의 State 클래스에서 공통으로 사용하는 상태와 로직을 담은 Mixin
+/// 공통으로 사용하는 상태와 로직을 담은 Mixin
 mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
   final Uuid uuid = const Uuid();
   final Map<String, List<TextEditingController>> controllers = {};
@@ -19,12 +19,11 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
   final Stopwatch _stopwatch = Stopwatch();
   bool _isResultSaved = false;
 
-  String? _currentExamId; // 현재 시험의 출처 ID를 저장할 변수
+  String? _currentExamId;
   void setCurrentExamId(String examId) {
     _currentExamId = examId;
   }
 
-  // [추가] AI 채점기와 결과 저장용 Map
   final OpenAiGraderService _graderService = OpenAiGraderService();
   final Map<String, GradingResult> aiGradingResults = {};
 
@@ -54,9 +53,9 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
   }
 
   List<TextEditingController> getControllersForQuestion(
-    String uniqueDisplayId,
-    int answerCount,
-  ) {
+      String uniqueDisplayId,
+      int answerCount,
+      ) {
     return controllers.putIfAbsent(uniqueDisplayId, () {
       final previousAnswers = userSubmittedAnswers[uniqueDisplayId] ?? [];
       return List.generate(answerCount, (index) {
@@ -77,42 +76,16 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
       });
       submissionStatus.clear();
       userSubmittedAnswers.clear();
-      aiGradingResults.clear(); // [추가] AI 채점 결과도 초기화
-      _stopwatch.reset(); // [추가] 스톱워치 초기화
-      _isResultSaved = false; // [추가] 저장 상태 초기화
+      aiGradingResults.clear();
+      _stopwatch.reset();
+      _isResultSaved = false;
       clearQuestionsList();
     });
   }
 
-  // [추가] 시험 결과 저장을 위한 데이터 생성 헬퍼 메서드
-  List<Map<String, dynamic>> _buildAttemptsDataForSaving() {
-    List<Map<String, dynamic>> attemptsData = [];
-    // 모든 문제를 순회하며 풀이 기록을 생성합니다.
-    // 여기서는 최상위 문제(parent)만 순회하지만, 필요 시 모든 leaf node를 순회하도록 수정할 수 있습니다.
-    for (var questionData in questions) {
-      final uniqueId = questionData['uniqueDisplayId'] as String;
-      final userAnswerList = userSubmittedAnswers[uniqueId];
-      final gradingResult = aiGradingResults[uniqueId];
-
-      // 개별 문제의 정답 여부를 확인합니다.
-      bool isCorrect = submissionStatus[uniqueId] ?? false;
-
-      attemptsData.add({
-        'originalQuestionNo': questionData['no']?.toString() ?? 'N/A',
-        'isCorrect': isCorrect,
-        'userAnswer': userAnswerList?.join(' || ') ?? '미제출',
-        'fullQuestionData': questionData,
-        'feedback': gradingResult?.explanation,
-        'score':
-            isCorrect ? (questionData['fullscore'] as num?)?.toInt() ?? 0 : 0,
-      });
-    }
-    return attemptsData;
-  }
-
   Map<String, dynamic> cleanNewlinesRecursive(
-    Map<String, dynamic> questionData,
-  ) {
+      Map<String, dynamic> questionData,
+      ) {
     Map<String, dynamic> cleanedData = {};
     cleanedData['uniqueDisplayId'] =
         questionData['uniqueDisplayId'] ?? uuid.v4();
@@ -121,7 +94,6 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
       if (value is String) {
         cleanedData[key] = value.replaceAll('\\n', '\n');
       } else if (value is List) {
-        // REVISED: 리스트도 그대로 통과시키도록 처리
         cleanedData[key] = value;
       } else if ((key == 'sub_questions' || key == 'sub_sub_questions') &&
           value is Map) {
@@ -141,37 +113,36 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
     return cleanedData;
   }
 
-  /// REVISED: 순서와 상관없이, 중복 입력을 허용하지 않는 Set 기반 정답 확인
-  /// REVISED: 'N개 중 M개만 맞히면 정답' 시나리오를 처리하는 채점 로직
   Future<void> checkAnswer(
-    Map<String, dynamic> questionData,
-    Map<String, dynamic>? parentData,
-  ) async {
+      Map<String, dynamic> questionData,
+      Map<String, dynamic>? parentData,
+      ) async {
     final String uniqueDisplayId = questionData['uniqueDisplayId'] as String;
     final answerControllers = controllers[uniqueDisplayId] ?? [];
     if (answerControllers.isEmpty ||
         answerControllers.every((c) => c.text.isNullOrEmpty)) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("답을 입력해주세요.")));
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("답을 입력해주세요.")));
       return;
     }
 
-    // 채점 시작 전, UI에 로딩 상태를 알리고 싶다면 여기서 상태 변경 가능
     setState(() {
       submissionStatus[uniqueDisplayId] = null;
-    }); // 예시: 로딩 상태
+    });
 
     bool overallCorrect;
     List<String> userAnswers = answerControllers.map((c) => c.text).toList();
 
-    // 분기 1: 서술형 문제인 경우 AI 채점
     if (questionData['type'] == '서술형') {
       final userAnswer = userAnswers.first;
       final modelAnswer = questionData['answer'] as String? ?? '';
       final questionText = questionData['question'] as String? ?? '';
       num? scoreValue = questionData['fullscore'] ?? parentData?['fullscore'];
-      final fullScore = (scoreValue)?.toInt() ?? 10;
+      final fullScore = (scoreValue)?.toInt() ?? 0;
+
+      print("--- [checkAnswer] AI 채점 요청 (ID: ${uniqueDisplayId.substring(0, 8)}) ---");
+      print("  - 문제: $questionText");
+      print("  - 사용자 답안: $userAnswer");
+      print("  - 만점 기준: $fullScore");
 
       final result = await _graderService.gradeAnswer(
         question: questionText,
@@ -179,7 +150,11 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
         userAnswer: userAnswer,
         fullScore: fullScore,
       );
-      overallCorrect = result.isCorrect;
+      overallCorrect = result.score > 0;
+
+      print("--- [checkAnswer] AI 채점 응답 수신 ---");
+      print("  - 획득 점수 (result.score): ${result.score}");
+      print("  - 정답 여부 (result.isCorrect): ${result.isCorrect}");
 
       if (mounted) setState(() => aiGradingResults[uniqueDisplayId] = result);
 
@@ -191,53 +166,27 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
         score: result.score,
         feedback: result.explanation,
       );
-    }
-    // 분기 2: 그 외 모든 문제 (단답형, 계산형, 다중답변)
-    else {
+    } else {
       final int requiredCount = questionData['isShufflable'] as int? ?? 1;
       final dynamic correctAnswerValue = questionData['answer'];
 
-      // Firestore에서 가져온 정답(List 또는 String)을 Set으로 변환
       final Set<String> correctAnswersSet;
       if (correctAnswerValue is List) {
-        correctAnswersSet =
-            correctAnswerValue
-                .map((e) => e.toString().trim().toLowerCase())
-                .toSet();
+        correctAnswersSet = correctAnswerValue.map((e) => e.toString().trim().toLowerCase()).toSet();
       } else if (correctAnswerValue is String) {
         correctAnswersSet = {correctAnswerValue.trim().toLowerCase()};
       } else {
-        correctAnswersSet = {}; // 정답이 없는 경우
+        correctAnswersSet = {};
       }
 
-      // 사용자가 입력한 답안을 Set으로 변환 (중복 제거 및 공백 처리)
-      final Set<String> userAnswersSet =
-          userAnswers
-              .map((e) => e.trim().toLowerCase())
-              .where((e) => e.isNotEmpty)
-              .toSet();
+      final Set<String> userAnswersSet = userAnswers.map((e) => e.trim().toLowerCase()).where((e) => e.isNotEmpty).toSet();
 
-      // --- 채점 로직 ---
-      // 1. "N개를 모두 맞춰야 하는 경우" (예: 정답 4개, 요구 4개)
       if (requiredCount == correctAnswersSet.length) {
-        overallCorrect = const SetEquality().equals(
-          correctAnswersSet,
-          userAnswersSet,
-        );
-      }
-      // 2. "M개 중 N개만 맞추면 되는 경우" (예: 정답 5개, 요구 4개)
-      else if (requiredCount < correctAnswersSet.length) {
-        overallCorrect =
-            userAnswersSet.length == requiredCount &&
-            userAnswersSet.every(
-              (answer) => correctAnswersSet.contains(answer),
-            );
-      }
-      // 3. 그 외의 경우 (기본: 단일 정답 비교)
-      else {
-        overallCorrect =
-            userAnswersSet.length == 1 &&
-            correctAnswersSet.contains(userAnswersSet.first);
+        overallCorrect = const SetEquality().equals(correctAnswersSet, userAnswersSet);
+      } else if (requiredCount < correctAnswersSet.length) {
+        overallCorrect = userAnswersSet.length == requiredCount && userAnswersSet.every((answer) => correctAnswersSet.contains(answer));
+      } else {
+        overallCorrect = userAnswersSet.length == 1 && correctAnswersSet.contains(userAnswersSet.first);
       }
 
       FirestoreService.saveQuestionAttempt(
@@ -245,12 +194,12 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
         userAnswer: userAnswers.join(' || '),
         isCorrect: overallCorrect,
         sourceExamId: _currentExamId!,
-        score:
-            overallCorrect
-                ? (questionData['fullscore'] as num?)?.toInt() ?? 0
-                : 0,
+        score: overallCorrect ? (questionData['fullscore'] as num?)?.toInt() ?? 0 : 0,
       );
     }
+
+    print("--- [checkAnswer] 최종 판정 ---");
+    print("  - 이 문제의 정답 여부(overallCorrect)를 ${overallCorrect}(으)로 submissionStatus에 저장합니다.");
 
     if (mounted) {
       setState(() {
@@ -263,9 +212,7 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
   void tryAgain(String uniqueDisplayId) {
     if (mounted) {
       setState(() {
-        controllers[uniqueDisplayId]?.forEach(
-          (controller) => controller.clear(),
-        );
+        controllers[uniqueDisplayId]?.forEach((controller) => controller.clear());
         submissionStatus.remove(uniqueDisplayId);
         userSubmittedAnswers.remove(uniqueDisplayId);
         aiGradingResults.remove(uniqueDisplayId);
@@ -273,38 +220,30 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
     }
   }
 
+  // --- [최종 채점 로직] ---
+
   /// 특정 문제 데이터 아래의 모든 최하위 문제(채점 대상)들을 재귀적으로 찾아 리스트로 반환합니다.
-  List<Map<String, dynamic>> getAllLeafNodes(
-    Map<String, dynamic> questionData,
-  ) {
+  List<Map<String, dynamic>> getAllLeafNodes(Map<String, dynamic> questionData) {
     final List<Map<String, dynamic>> leaves = [];
 
-    final bool hasSubQuestions =
-        questionData.containsKey('sub_questions') &&
-        questionData['sub_questions'] is Map &&
-        (questionData['sub_questions'] as Map).isNotEmpty;
-    final bool hasSubSubQuestions =
-        questionData.containsKey('sub_sub_questions') &&
-        questionData['sub_sub_questions'] is Map &&
-        (questionData['sub_sub_questions'] as Map).isNotEmpty;
+    final bool hasSubQuestions = questionData.containsKey('sub_questions') && questionData['sub_questions'] is Map && (questionData['sub_questions'] as Map).isNotEmpty;
+    final bool hasSubSubQuestions = questionData.containsKey('sub_sub_questions') && questionData['sub_sub_questions'] is Map && (questionData['sub_sub_questions'] as Map).isNotEmpty;
 
     if (!hasSubQuestions && !hasSubSubQuestions) {
-      if (questionData.containsKey('fullscore')) {
+      final type = questionData['type'] as String?;
+      if (type != null && type != '발문') {
         leaves.add(questionData);
       }
     } else {
       if (hasSubQuestions) {
         final subMap = questionData['sub_questions'] as Map<String, dynamic>;
-        for (final subQuestion
-            in subMap.values.whereType<Map<String, dynamic>>()) {
+        for (final subQuestion in subMap.values.whereType<Map<String, dynamic>>()) {
           leaves.addAll(getAllLeafNodes(subQuestion));
         }
       }
       if (hasSubSubQuestions) {
-        final subSubMap =
-            questionData['sub_sub_questions'] as Map<String, dynamic>;
-        for (final subSubQuestion
-            in subSubMap.values.whereType<Map<String, dynamic>>()) {
+        final subSubMap = questionData['sub_sub_questions'] as Map<String, dynamic>;
+        for (final subSubQuestion in subSubMap.values.whereType<Map<String, dynamic>>()) {
           leaves.addAll(getAllLeafNodes(subSubQuestion));
         }
       }
@@ -314,56 +253,103 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
 
   /// 사용자가 획득한 점수를 계산합니다.
   int calculateUserScore() {
+    print("\n\n--- [calculateUserScore] 채점 시작 ---");
     int totalScore = 0;
+
     for (final questionData in questions) {
-      // Mixin의 'questions' getter 사용
+      final parentId = questionData['no'] ?? 'ID 없음';
+      print("\n[상위 문제 처리 시작] 문제: $parentId");
       final bool hasChildren =
-          (questionData.containsKey('sub_questions') &&
-              (questionData['sub_questions'] as Map).isNotEmpty) ||
-          (questionData.containsKey('sub_sub_questions') &&
-              (questionData['sub_sub_questions'] as Map).isNotEmpty);
+          (questionData.containsKey('sub_questions') && (questionData['sub_questions'] as Map).isNotEmpty) ||
+              (questionData.containsKey('sub_sub_questions') && (questionData['sub_sub_questions'] as Map).isNotEmpty);
 
       if (hasChildren) {
-        final List<Map<String, dynamic>> leafChildren = getAllLeafNodes(
-          questionData,
-        );
-        if (leafChildren.isEmpty) continue;
+        print("  -> 컨테이너 문제입니다. 하위 문제들을 확인합니다.");
+        final List<Map<String, dynamic>> leafChildren = getAllLeafNodes(questionData);
+        print("  -> 발견된 최하위 자식 문제 수: ${leafChildren.length}");
+        if (leafChildren.isEmpty) {
+          print("  -> 처리할 하위 문제가 없으므로 다음 상위 문제로 넘어갑니다.");
+          continue;
+        }
 
-        bool allChildrenCorrect = true;
+        bool allChildrenFullyCorrect = true;
         int partialScore = 0;
 
         for (final leaf in leafChildren) {
           final uniqueId = leaf['uniqueDisplayId'] as String?;
-          if (uniqueId != null && submissionStatus[uniqueId] == true) {
-            // Mixin의 'submissionStatus' 사용
-            final score = leaf['fullscore'];
-            partialScore +=
-                (score is int ? score : int.tryParse(score.toString()) ?? 0);
+          final leafNo = leaf['no'] ?? '하위 ID 없음';
+          print("    - [하위 문제 검사] 문제: $leafNo (ID: ${uniqueId?.substring(0, 8)})");
+          if (uniqueId == null) {
+            allChildrenFullyCorrect = false;
+            print("      -> uniqueId가 없어 '완벽한 정답'이 아님으로 처리.");
+            continue;
+          }
+
+          final bool isCorrect = submissionStatus[uniqueId] ?? false;
+          print("      -> isCorrect (submissionStatus 값): $isCorrect");
+
+          if (isCorrect) {
+            if (leaf['type'] == '서술형') {
+              final aiResult = aiGradingResults[uniqueId];
+              final leafFullScore = (leaf['fullscore'] as num?)?.toInt() ?? 0;
+              print("      -> '서술형'입니다. AI 채점 결과를 확인합니다.");
+              if (aiResult != null) {
+                print("      -> AI 점수: ${aiResult.score} / 만점: $leafFullScore");
+                partialScore += aiResult.score;
+                if (aiResult.score < leafFullScore) {
+                  allChildrenFullyCorrect = false;
+                  print("      -> 부분 점수이므로 allChildrenFullyCorrect = false 로 변경");
+                }
+              } else {
+                allChildrenFullyCorrect = false;
+                print("      -> AI 채점 결과(aiResult)가 null이므로 allChildrenFullyCorrect = false 로 변경");
+              }
+            } else {
+              final leafScore = (leaf['fullscore'] as num?)?.toInt() ?? 0;
+              partialScore += leafScore;
+              print("      -> '단답형/계산형' 정답. 부분 점수(partialScore)에 +$leafScore");
+            }
           } else {
-            allChildrenCorrect = false;
+            allChildrenFullyCorrect = false;
+            print("      -> 오답(isCorrect:false)이므로 allChildrenFullyCorrect = false 로 변경");
           }
         }
 
-        if (allChildrenCorrect) {
-          final parentScore = questionData['fullscore'];
-          totalScore +=
-              (parentScore is int
-                  ? parentScore
-                  : int.tryParse(parentScore.toString()) ?? 0);
+        print("  -> 컨테이너 내 하위 문제 처리 완료.");
+        print("  -> 계산된 부분 점수 합계(partialScore): $partialScore");
+        print("  -> 모든 하위 문제 완벽 정답 여부(allChildrenFullyCorrect): $allChildrenFullyCorrect");
+
+        if (allChildrenFullyCorrect) {
+          final parentScore = (questionData['fullscore'] as num?)?.toInt() ?? 0;
+          totalScore += parentScore;
+          print("  -> [결과] '모두 완벽 정답'이므로 상위 문제 점수인 $parentScore 점을 더합니다.");
         } else {
           totalScore += partialScore;
+          print("  -> [결과] '부분 정답/오답'이므로 계산된 부분 점수인 $partialScore 점을 더합니다.");
         }
+
       } else {
+        print("  -> 독립형 문제입니다.");
         final uniqueId = questionData['uniqueDisplayId'] as String?;
-        if (uniqueId != null &&
-            submissionStatus[uniqueId] == true &&
-            questionData.containsKey('fullscore')) {
-          final score = questionData['fullscore'];
-          totalScore +=
-              (score is int ? score : int.tryParse(score.toString()) ?? 0);
+        if (uniqueId != null && (submissionStatus[uniqueId] ?? false)) {
+          if (questionData['type'] == '서술형') {
+            final aiResult = aiGradingResults[uniqueId];
+            if (aiResult != null) {
+              totalScore += aiResult.score;
+              print("  -> [결과] 독립 서술형 정답. AI 점수 ${aiResult.score} 점을 더합니다.");
+            }
+          } else {
+            final score = (questionData['fullscore'] as num?)?.toInt() ?? 0;
+            totalScore += score;
+            print("  -> [결과] 독립 단답형/계산형 정답. $score 점을 더합니다.");
+          }
+        } else {
+          print("  -> 오답이거나 채점되지 않은 문제입니다.");
         }
       }
+      print("[현재까지 총점]: $totalScore");
     }
+    print("\n--- 채점 종료 --- 최종 총점: $totalScore");
     return totalScore;
   }
 
@@ -371,11 +357,9 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
   int calculateMaxScore() {
     int maxScore = 0;
     for (final questionData in questions) {
-      // Mixin의 'questions' getter 사용
       if (questionData.containsKey('fullscore')) {
         final score = questionData['fullscore'];
-        maxScore +=
-            (score is int ? score : int.tryParse(score.toString()) ?? 0);
+        maxScore += (score is int ? score : int.tryParse(score.toString()) ?? 0);
       }
     }
     return maxScore;
@@ -383,86 +367,89 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
 
   /// 채점 결과를 다이얼로그로 표시합니다.
   Future<void> showGradingResult(
-    BuildContext context, {
-    required String examId, // 시험을 식별할 고유 ID
-    required String examTitle, // 저장될 시험 제목
-  }) async {
-    stopTimer(); // 채점 시 타이머 중지
+      BuildContext context, {
+        required String examId,
+        required String examTitle,
+      }) async {
+    stopTimer();
 
     final int userScore = calculateUserScore();
     final int maxScore = calculateMaxScore();
 
-    showDialog(
-      context: context,
-      barrierDismissible: false, // 다이얼로그 바깥을 눌러도 닫히지 않도록 설정
-      builder: (BuildContext dialogContext) {
-        // 다이얼로그 내부 상태(예: '저장 완료' 텍스트) 변경을 위해 StatefulBuilder 사용
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('💯 채점 결과'),
-              content: SingleChildScrollView(
-                child: ListBody(
-                  children: <Widget>[
-                    Text(
-                      '총점: $maxScore점\n획득 점수: $userScore점',
-                      style: const TextStyle(fontSize: 16, height: 1.5),
+    // UI가 빌드된 후에 다이얼로그를 표시하도록 예약
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if(mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext dialogContext) {
+            return StatefulBuilder(
+              builder: (context, setDialogState) {
+                return AlertDialog(
+                  title: const Text('💯 채점 결과'),
+                  content: SingleChildScrollView(
+                    child: ListBody(
+                      children: <Widget>[
+                        Text('총점: $maxScore점\n획득 점수: $userScore점', style: const TextStyle(fontSize: 16, height: 1.5)),
+                        const SizedBox(height: 8),
+                        Text('총 소요 시간: ${_stopwatch.elapsed.inSeconds}초'),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Text('총 소요 시간: ${_stopwatch.elapsed.inSeconds}초'),
+                  ),
+                  actions: <Widget>[
+                    if (!_isResultSaved)
+                      TextButton(
+                        child: const Text('결과 저장하기'),
+                        onPressed: () async {
+                          final attemptsData = _buildAttemptsDataForSaving();
+                          await FirestoreService.saveExamResult(
+                            sourceExamId: examId,
+                            examTitle: examTitle,
+                            timeTaken: _stopwatch.elapsed.inSeconds,
+                            totalScore: userScore,
+                            attemptsData: attemptsData,
+                          );
+                          setDialogState(() => _isResultSaved = true);
+                          if(context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('결과가 성공적으로 저장되었습니다.')));
+                        },
+                      ),
+                    if (_isResultSaved)
+                      TextButton(onPressed: null, child: const Text('저장 완료')),
+                    TextButton(child: const Text('닫기'), onPressed: () => Navigator.of(dialogContext).pop()),
                   ],
-                ),
-              ),
-              actions: <Widget>[
-                // '결과 저장하기' 버튼: 아직 저장되지 않았을 때만 활성화
-                if (!_isResultSaved)
-                  TextButton(
-                    child: const Text('결과 저장하기'),
-                    onPressed: () async {
-                      // 1. 저장할 데이터 생성
-                      final attemptsData = _buildAttemptsDataForSaving();
-
-                      // 2. Firestore 서비스 호출
-                      await FirestoreService.saveExamResult(
-                        sourceExamId: examId,
-                        examTitle: examTitle,
-                        timeTaken: _stopwatch.elapsed.inSeconds,
-                        totalScore: userScore,
-                        // 전체 점수가 아닌 획득 점수를 저장
-                        attemptsData: attemptsData,
-                      );
-
-                      // 3. UI 업데이트 및 피드백
-                      setDialogState(() {
-                        _isResultSaved = true;
-                      });
-
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('결과가 성공적으로 저장되었습니다.')),
-                        );
-                      }
-                    },
-                  ),
-
-                // 저장된 후에는 '저장 완료' 텍스트 버튼으로 변경
-                if (_isResultSaved)
-                  TextButton(
-                    onPressed: null, // 비활성화
-                    child: const Text('저장 완료'),
-                  ),
-
-                // '닫기' 버튼
-                TextButton(
-                  child: const Text('닫기'),
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                ),
-              ],
+                );
+              },
             );
           },
         );
-      },
-    );
+      }
+    });
+  }
+
+  List<Map<String, dynamic>> _buildAttemptsDataForSaving() {
+    List<Map<String, dynamic>> attemptsData = [];
+    final allLeafNodes = questions.expand((q) => getAllLeafNodes(q).isNotEmpty ? getAllLeafNodes(q) : [q]).toList();
+
+    for (var questionData in allLeafNodes) {
+      final uniqueId = questionData['uniqueDisplayId'] as String?;
+      if (uniqueId == null) continue;
+
+      final userAnswerList = userSubmittedAnswers[uniqueId];
+      final gradingResult = aiGradingResults[uniqueId];
+      bool isCorrect = submissionStatus[uniqueId] ?? false;
+
+      attemptsData.add({
+        'originalQuestionNo': questionData['no']?.toString() ?? 'N/A',
+        'isCorrect': isCorrect,
+        'userAnswer': userAnswerList?.join(' || ') ?? '미제출',
+        'fullQuestionData': questionData,
+        'feedback': gradingResult?.explanation,
+        'score': isCorrect
+            ? (gradingResult?.score ?? (questionData['fullscore'] as num?)?.toInt() ?? 0)
+            : 0,
+      });
+    }
+    return attemptsData;
   }
 }
 
@@ -539,8 +526,7 @@ class _QuestionInteractiveDisplayState
             actualQuestionType == "계산" ||
             actualQuestionType == "서술형") &&
         uniqueDisplayId != null &&
-        answerCount > 0 &&
-        correctAnswers.isNotEmpty;
+        answerCount > 0;
 
     List<TextEditingController>? controllers =
         isAnswerable

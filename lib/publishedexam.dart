@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'appbar.dart'; // 사용자 정의 AppBar (CSAppBar)
+import 'appbar.dart';
 import 'dart:async';
-import 'questions_common.dart'; // 공통 코드 임포트
+import 'questions_common.dart';
 import 'question_list.dart';
 
 class PublishedExamPage extends StatefulWidget {
@@ -13,7 +13,6 @@ class PublishedExamPage extends StatefulWidget {
   State<PublishedExamPage> createState() => _PublishedExamPageState();
 }
 
-// 1. QuestionStateMixin 적용
 class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStateMixin<PublishedExamPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -32,14 +31,15 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
   String _errorMessage = '';
   List<Map<String, dynamic>> _questions = [];
 
-  // 2. Mixin의 abstract 멤버 구현
   @override
   List<Map<String, dynamic>> get questions => _questions;
 
   @override
   void clearQuestionsList() {
-    _questions = [];
-    _errorMessage = '';
+    if(mounted) setState(() {
+      _questions = [];
+      _errorMessage = '';
+    });
   }
 
   @override
@@ -47,8 +47,6 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
     super.initState();
     _fetchAndParseDocumentIds();
   }
-
-  // 3. 공통 메서드들(_getController, _clearAll, _dispose, _checkAnswer 등)은 모두 삭제됨
 
   Map<String, String>? _parseDocumentId(String docId) {
     final parts = docId.split('-');
@@ -130,7 +128,6 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
     if (mounted) setState(() { _isLoadingQuestions = true; _errorMessage = ''; clearAllAttemptStatesAndQuestions(); });
 
     final String documentId = '$_selectedYear-$_selectedRound-$_selectedGrade';
-
     setCurrentExamId(documentId);
 
     try {
@@ -150,7 +147,7 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
               if (!questionData.containsKey('no') || (questionData['no'] as String?).isNullOrEmpty) {
                 questionData['no'] = mainKey;
               }
-              fetchedQuestions.add(cleanNewlinesRecursive(questionData)); // Mixin의 메서드 사용
+              fetchedQuestions.add(cleanNewlinesRecursive(questionData));
             }
           }
           fetchedQuestions.sort((a, b) {
@@ -159,8 +156,12 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
             int mainNoCompare = parsedA[0].compareTo(parsedB[0]);
             return mainNoCompare != 0 ? mainNoCompare : parsedA[1].compareTo(parsedB[1]);
           });
-          _questions = fetchedQuestions;
-          startTimer();
+
+          if(mounted) setState(() {
+            _questions = fetchedQuestions;
+            startTimer();
+          });
+
         } else { _errorMessage = '시험 문서($documentId) 데이터를 가져올 수 없습니다.'; }
       } else { _errorMessage = '선택한 조건의 시험 문서($documentId)를 찾을 수 없습니다.'; }
     } catch (e, s) {
@@ -171,21 +172,18 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
     }
   }
 
-  // 6. 복잡했던 위젯 빌드 함수는 모두 삭제됨
-
   Widget _buildBody() {
     if (_isLoadingQuestions) return const Center(child: CircularProgressIndicator());
     if (_errorMessage.isNotEmpty && _questions.isEmpty) return Center(child: Text(_errorMessage, style: const TextStyle(color: Colors.red)));
-    if (_questions.isEmpty) return Center(child: Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Text(_selectedYear == null ? '년도, 회차, 등급을 선택하고 시험지를 불러오세요.' : '선택한 조건의 문제가 없습니다.', textAlign: TextAlign.center),
+    if (_questions.isEmpty) return const Center(child: Padding(
+      padding: EdgeInsets.all(16.0),
+      child: Text('년도, 회차, 등급을 선택하고 시험지를 불러오세요.', textAlign: TextAlign.center),
     ));
 
-    // REVISED: 공통 위젯 사용
     return QuestionListView(
       questions: _questions,
       getControllers: getControllersForQuestion,
-      onCheckAnswer: (questionData, parentData) => checkAnswer(questionData, parentData),
+      onCheckAnswer: checkAnswer,
       onTryAgain: tryAgain,
       submissionStatus: submissionStatus,
       userSubmittedAnswers: userSubmittedAnswers,
@@ -256,25 +254,21 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
       floatingActionButton: _questions.isNotEmpty
           ? FloatingActionButton.extended(
         onPressed: () {
-          // 1. 현재 시각을 얻어옵니다.
-          // millisecondsSinceEpoch는 고유한 숫자값을 반환하여 ID로 쓰기에 매우 좋습니다.
           final String timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-
-          // 2. 기존 examId 형식 뒤에 타임스탬프를 붙여 고유한 ID를 생성합니다.
           final String uniqueExamId = '$_selectedYear-$_selectedRound-$_selectedGrade-$timestamp';
 
-          // 3. showGradingResult 함수에 새로 만든 고유 ID를 전달합니다.
+          // Mixin에 있는 showGradingResult 함수를 직접 호출
           showGradingResult(
             context,
-            examId: uniqueExamId, // 수정된 부분
-            examTitle: '$_selectedYear년 $_selectedRound회차 $_selectedGrade 기출문제 시험 ($timestamp 응시)',
+            examId: uniqueExamId,
+            examTitle: '$_selectedYear년 $_selectedRound회차 $_selectedGrade 기출문제 ($timestamp 응시)',
           );
         },
         label: const Text('채점하기'),
         icon: const Icon(Icons.check_circle_outline),
         tooltip: '지금까지 푼 문제 채점하기',
       )
-          : null, // 문제가 없으면 버튼을 표시하지 않음
+          : null,
     );
   }
 }

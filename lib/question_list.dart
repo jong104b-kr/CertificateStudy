@@ -105,12 +105,20 @@ class QuestionListView extends StatelessWidget {
   Widget _buildInteractiveDisplayForNode(BuildContext context, Map<String, dynamic> questionData, Map<String, dynamic>? parentData, double indent, String prefix, bool showText) {
     final type = questionData['type'] as String? ?? '';
     final uniqueId = questionData['uniqueDisplayId'] as String;
+    final scoreValue = questionData['fullscore'] ?? parentData?['fullscore'];
+    final scoreString = scoreValue != null ? '${scoreValue}점' : '';
+    final String typeAndScoreString;
+    if (type.isEmpty) {
+      typeAndScoreString = ""; // 타입이 없으면 아무것도 표시하지 않습니다.
+    } else {
+      typeAndScoreString = ' ($type - $scoreString)'; // 예: (서술형 - 4점)
+    }
 
     return QuestionInteractiveDisplay(
       questionData: questionData,
       leftIndent: indent,
       displayNoWithPrefix: prefix,
-      questionTypeToDisplay: (type == "발문" || type.isEmpty) ? "" : " ($type)",
+      questionTypeToDisplay: typeAndScoreString,
       showQuestionText: showText,
       getControllers: getControllers,
       onCheckAnswer: onCheckAnswer,
