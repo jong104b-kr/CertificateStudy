@@ -50,18 +50,28 @@ class UserDataProvider extends ChangeNotifier {
   // Firebase 인증 상태 변화를 실시간으로 구독하여 _currentUser를 업데이트하고 UI에 알립니다.
   UserDataProvider() {
     // userChanges는 로그인/로그아웃 뿐만 아니라, 사용자 토큰이 갱신될 때 (예: 이메일 변경 완료 후)도 이벤트를 발생시켜 더 효과적입니다.
-    _auth.userChanges().listen((User? user) async {
+    _auth.idTokenChanges().listen((User? user) async {
       _currentUser = user;
 
       if (user != null) {
-        // 이메일 변경과 같은 외부 작업 후 앱으로 돌아왔을 때 최신 상태를 반영하기 위해
-        // Firebase 서버로부터 최신 사용자 정보를 강제로 가져옵니다.
-        await user.reload();
-        // reload() 후에는 _auth.currentUser를 다시 할당하여 최신 user 객체를 사용해야 합니다.
-        user = _auth.currentUser;
-        _currentUser = user;
+        print('>>> idTokenChanges 리스너 실행: 현재 사용자 ${user.email}');
 
-        // reload 후 사용자가 null이 될 수 있는 예외적인 경우를 처리합니다.
+        // ▼▼▼ Auth 상태 강제 갱신 로직 (가장 중요) ▼▼▼
+        try {
+          print('>>> Auth 토큰 강제 새로고침 시도...');
+          await user.getIdToken(true); // ID 토큰을 강제로 새로고침합니다.
+
+          print('>>> 사용자 정보 다시 로드 시도...');
+          await user.reload(); // 토큰 새로고침 후 reload를 다시 호출합니다.
+
+          user = _auth.currentUser; // 최신 사용자 정보를 다시 가져옵니다.
+          _currentUser = user;
+          print('>>> Auth 상태 강제 갱신 완료. 현재 감지된 Auth E메일: ${user?.email}');
+
+        } catch (e) {
+          print('❗️ Auth 상태 강제 갱신 중 오류 발생: $e');
+        }
+
         if (user == null) {
           notifyListeners();
           return;
@@ -74,6 +84,9 @@ class UserDataProvider extends ChangeNotifier {
         if (docSnapshot.exists) {
           final firestoreData = docSnapshot.data();
           final firestoreEmail = firestoreData?['email'] as String?;
+
+          print('>>> [동기화 검사] Auth E메일: ${user.email}');
+          print('>>> [동기화 검사] Firestore E메일: $firestoreEmail');
 
           // Firebase Auth의 이메일과 Firestore의 이메일이 다른지 확인합니다.
           if (firestoreEmail != null && firestoreEmail != user.email) {
@@ -321,22 +334,18 @@ class UserDataProvider extends ChangeNotifier {
     }
 
     try {
-      // 1. 재인증: 민감한 작업이므로 현재 로그인된 사용자의 E메일(email)과 비밀번호(pw)로 사용자를 재인증합니다.
       AuthCredential credential = EmailAuthProvider.credential(
-        email: email, // 현재 로그인된 사용자의 이메일 사용
-        password: pw, // 현재 비밀번호 변수명 'pw' 사용
+        email: email,
+        password: pw,
       );
       await user.reauthenticateWithCredential(credential);
 
-      // 2. Firebase Authentication의 verifyBeforeUpdateEmail을 사용하여 이메일 변경 시도
-      //    이메일 확인 후 변경이 이루어집니다.
-      //    이 호출은 확인 메일을 보내는 역할만 하며, 실제 Firebase Auth의 이메일은 아직 변경되지 않습니다.
-      print('I/flutter: [EmailChange] E메일 변경 확인 메일 발송 시도: $newEmail');
       await user.verifyBeforeUpdateEmail(newEmail);
-      // 이메일 변경은 사용자에게 확인 이메일을 보낸 후 적용됩니다.
       print('I/flutter: [EmailChange] E메일 변경 확인 메일 발송 요청 성공');
-      return ValidationResult.success('새 E메일 주소로 확인 링크를 보냈습니다. 링크를 클릭하여 이메일 변경을 완료해주세요. '
-          '변경 완료 후에는 새 E메일 주소로 다시 로그인해주세요.'); // 사용자 안내 메시지 강화
+
+      return ValidationResult.success(
+          '새 E메일 주소로 확인 링크를 보냈습니다. 링크를 클릭하여 변경을 완료해주세요.'
+      );
     } on FirebaseAuthException catch (e) {
       // Firebase Authentication 관련 오류 처리
       print('E/flutter: [EmailChange] FirebaseAuthException 발생 (verifyBeforeUpdateEmail): ${e.code} - ${e.message}');

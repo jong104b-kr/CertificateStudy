@@ -5,7 +5,6 @@ import 'changepw.dart';
 import 'appbar.dart';
 import 'ui_utils.dart';
 import 'UserDataProvider.dart';
-import 'main.dart';
 
 class ModifyAccountPage extends StatefulWidget {
   const ModifyAccountPage({super.key, required this.title});
@@ -32,7 +31,6 @@ class _ModifyAccountPageState extends State<ModifyAccountPage> {
   }
 
   void _changeEmail() async {
-    final userDataProvider = Provider.of<UserDataProvider>(context, listen: false);
     final String id = _id.text.trim();
     final String pw = _pw.text.trim();
     final String email = _email.text.trim();
@@ -40,12 +38,11 @@ class _ModifyAccountPageState extends State<ModifyAccountPage> {
 
     if (id.isEmpty || pw.isEmpty || email.isEmpty || newEmail.isEmpty) {
       showSnackBarMessage(context, '모든 필드를 입력해주세요.');
-      return; // 유효성 검사 실패 시 함수 종료
+      return;
     }
-    // 여기까지 통과하면 최소한 필드가 비어있지는 않음
 
-    // 기존의 비즈니스 로직 유효성 검사는 UserDataProviderUtility 내부에서 계속 수행됩니다.
-    final ValidationResult result = await utility.validateAndChangeEmail( // 반환 타입이 ValidationResult
+    // UserDataProvider의 로직을 호출합니다.
+    final ValidationResult result = await utility.validateAndChangeEmail(
       id: id,
       pw: pw,
       email: email,
@@ -53,26 +50,20 @@ class _ModifyAccountPageState extends State<ModifyAccountPage> {
       userDataProvider: userDataProvider,
     );
 
-    if (!result.isSuccess) {
-      showSnackBarMessage(context, result.message);
-      return;
+    if (!mounted) return;
+
+    // UserDataProvider가 반환한 메시지를 그대로 SnackBar에 표시합니다.
+    showSnackBarMessage(context, result.message);
+
+    // ▼▼▼ 핵심: UI는 로그아웃을 직접 호출하지 않습니다! ▼▼▼
+    // 성공 시, 단순히 이전 화면으로 돌아가 사용자가 로그인 상태를 유지하도록 합니다.
+    if (result.isSuccess) {
+      _id.clear();
+      _pw.clear();
+      _email.clear();
+      _newEmail.clear();
+      Navigator.of(context).pop(); // 이전 화면(회원정보창)으로 돌아가기
     }
-
-    showSnackBarMessage(context, '새 E메일 주소로 확인 링크를 보냈습니다. 링크를 클릭하여 E메일 변경을 완료해주세요.');
-
-    await userDataProvider.logoutUser();
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MainPage(title: widget.title), // 로그인 페이지로 이동
-      ),
-      (Route<dynamic> route) => false,
-    );
-
-    _id.clear();
-    _pw.clear();
-    _email.clear();
-    _newEmail.clear();
   }
 
   @override
