@@ -67,6 +67,17 @@ class _CSAppBarState extends State<CSAppBar> { // State 클래스 생성
               return Row(
                   children: [
                     ElevatedButton(
+                        child: const Text('회원정보'),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => AccountInfoPage(title: widget.title),
+                            ),
+                          );
+                        }
+                    ),
+                    ElevatedButton(
                         child: const Text('로그아웃'),
                         onPressed: () async {
                           await userDataProvider.logoutUser(); // Consumer의 userDataProvider 사용
@@ -79,17 +90,6 @@ class _CSAppBarState extends State<CSAppBar> { // State 클래스 생성
                               builder: (context) => MainPage(title: widget.title),
                             ),
                             (Route<dynamic> route) => false,
-                          );
-                        }
-                    ),
-                    ElevatedButton(
-                        child: const Text('회원정보'),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => AccountInfoPage(title: widget.title),
-                            ),
                           );
                         }
                     ),
