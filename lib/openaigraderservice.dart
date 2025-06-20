@@ -40,18 +40,18 @@ class OpenAiGraderService {
     // 2. 시스템 메시지: AI에게 역할을 부여하고, 출력 형식을 강제합니다.
     final systemMessage = {
       "role": "system",
-      "content": "You are a fair and precise grading assistant. Evaluate the user's answer based on the model answer and the question's intent. Your response MUST be a single, valid JSON object with three keys: 'is_correct' (boolean, true if score is greater than 0), 'score' (integer, from 0 to $fullScore), and 'explanation' (string, a brief reason for the score). Do not include any text outside of the JSON object."
+      "content": "너는 공정하고 정확한 채점관이야. 사용자의 답안을 모범답안과 질문의 의도에 근거해서 채점해줘. 네 답변은 다음의 3개 키를 가진 하나의 유효한 JSON object여야 해 :  'is_correct' (boolean, 점수가 0점보다 높을 때 true), 'score' (integer, 0에서 $fullScore 까지의 값을 가짐), 'explanation' (string, 그 점수를 매긴 간략한 이유). JSON object 바깥에는 어떤 문구도 넣지 마."
     };
 
     // 3. 사용자 메시지: AI에게 채점할 데이터(문제, 정답, 사용자 답)를 전달합니다.
     final userMessage = {
       "role": "user",
       "content": """
-      Please grade the following:
-      - Question: "$question"
-      - Model Answer: "$modelAnswer"
-      - Maximum Score: $fullScore
-      - User's Answer: "$userAnswer"
+      아래의 자료를 근거로 사용자의 답안을 채점해줘.
+      - 문제: "$question"
+      - 모범답안: "$modelAnswer"
+      - 최고점수: $fullScore
+      - 사용자의 답안: "$userAnswer"
       """
     };
 
