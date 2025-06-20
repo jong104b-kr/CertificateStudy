@@ -1,9 +1,11 @@
+import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import 'package:collection/collection.dart';
+
 import 'studydataupdater.dart';
 import 'openaigraderservice.dart';
-import 'dart:async';
 
 /// 문자열이 null이거나 비어있는지 확인하는 확장 함수
 extension StringNullOrEmptyExtension on String? {
@@ -125,6 +127,10 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
       return;
     }
 
+    print("--- [checkAnswer 시작] (ID: ${uniqueDisplayId.substring(0, 5)}) ---");
+    print("  - 문제 타입: ${questionData['type']}");
+    if(parentData != null) print("  - 이 문제는 하위 문제입니다. (부모 문제 no: ${parentData['no']})");
+
     setState(() {
       submissionStatus[uniqueDisplayId] = null;
     });
@@ -133,39 +139,74 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
     List<String> userAnswers = answerControllers.map((c) => c.text).toList();
 
     if (questionData['type'] == '서술형') {
-      final userAnswer = userAnswers.first;
-      final modelAnswer = questionData['answer'] as String? ?? '';
-      final questionText = questionData['question'] as String? ?? '';
-      num? scoreValue = questionData['fullscore'] ?? parentData?['fullscore'];
-      final fullScore = (scoreValue)?.toInt() ?? 0;
+      print("  -> 서술형 채점 로직으로 진입했습니다. [순서 무관 로직 적용]");
 
-      print("--- [checkAnswer] AI 채점 요청 (ID: ${uniqueDisplayId.substring(0, 8)}) ---");
-      print("  - 문제: $questionText");
-      print("  - 사용자 답안: $userAnswer");
-      print("  - 만점 기준: $fullScore");
+      // 1. 사용자 답안 리스트를 가져와서 '알파벳순'으로 정렬합니다.
+      userAnswers.sort();
+      // 정렬된 답안을 번호를 붙여 하나의 문자열로 합칩니다.
+      final userAnswerString = userAnswers
+          .asMap()
+          .entries
+          .map((entry) => "(${entry.key + 1}) ${entry.value}")
+          .join(' || ');
 
-      final result = await _graderService.gradeAnswer(
-        question: questionText,
-        modelAnswer: modelAnswer,
-        userAnswer: userAnswer,
-        fullScore: fullScore,
-      );
-      overallCorrect = result.score > 0;
+      // 2. 모범 답안도 똑같이 '알파벳순'으로 정렬합니다.
+      final dynamic correctAnswerValue = questionData['answer'];
+      String modelAnswerString = '';
 
-      print("--- [checkAnswer] AI 채점 응답 수신 ---");
-      print("  - 획득 점수 (result.score): ${result.score}");
-      print("  - 정답 여부 (result.isCorrect): ${result.isCorrect}");
+      if (correctAnswerValue is List) {
+        // List<dynamic>을 List<String>으로 안전하게 변환 후 정렬
+        List<String> modelAnswersList = correctAnswerValue.map((e) => e.toString().trim()).toList();
+        modelAnswersList.sort();
+        // 정렬된 모범 답안을 번호를 붙여 하나의 문자열로 합칩니다.
+        modelAnswerString = modelAnswersList
+            .asMap()
+            .entries
+            .map((entry) => "(${entry.key + 1}) ${entry.value}")
+            .join(' || ');
+      } else if (correctAnswerValue is String) {
+        modelAnswerString = correctAnswerValue; // 단일 답안은 정렬할 필요가 없습니다.
+      }
 
-      if (mounted) setState(() => aiGradingResults[uniqueDisplayId] = result);
+      // --- [디버깅] AI에 보낼 정렬된 데이터 확인 ---
+      print("  -> AI 채점 요청 데이터 (정렬됨):");
+      print("    - 사용자 답안: $userAnswerString");
+      print("    - 모범 답안: $modelAnswerString");
 
-      FirestoreService.saveQuestionAttempt(
-        questionData: questionData,
-        userAnswer: userAnswer,
-        isCorrect: overallCorrect,
-        sourceExamId: _currentExamId!,
-        score: result.score,
-        feedback: result.explanation,
-      );
+      // --- 기존의 AI 채점 및 저장 로직은 그대로 사용 ---
+      try {
+        num? scoreValue = questionData['fullscore'] ?? parentData?['fullscore'];
+        final fullScore = (scoreValue)?.toInt() ?? 0;
+
+        final result = await _graderService.gradeAnswer(
+          question: questionData['question'] as String? ?? '',
+          modelAnswer: modelAnswerString,   // 정렬된 모범 답안 사용
+          userAnswer: userAnswerString,     // 정렬된 사용자 답안 사용
+          fullScore: fullScore,
+        );
+
+        print("  -> AI 채점 응답 수신 성공! 점수: ${result.score}");
+
+        overallCorrect = result.isCorrect;
+        if (mounted) setState(() => aiGradingResults[uniqueDisplayId] = result);
+
+        FirestoreService.saveQuestionAttempt(
+          sourceExamId: _currentExamId!,
+          questionData: questionData,
+          userAnswer: userAnswerString, // 저장 시에도 정렬된 답안을 저장할 수 있음
+          isCorrect: overallCorrect,
+          score: result.score,
+          feedback: result.explanation,
+        );
+      } catch (e) {
+        print("  -> !!! AI 채점 중 오류 발생: $e");
+        overallCorrect = false;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("채점 중 오류가 발생했습니다.")));
+          setState(() => submissionStatus.remove(uniqueDisplayId));
+        }
+        return;
+      }
     } else {
       final int requiredCount = questionData['isShufflable'] as int? ?? 1;
       final dynamic correctAnswerValue = questionData['answer'];
@@ -202,7 +243,7 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
     print("  - 이 문제의 정답 여부(overallCorrect)를 ${overallCorrect}(으)로 submissionStatus에 저장합니다.");
 
     if (mounted) {
-      setState(() {
+        setState(() {
         userSubmittedAnswers[uniqueDisplayId] = userAnswers;
         submissionStatus[uniqueDisplayId] = overallCorrect;
       });
@@ -427,29 +468,60 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
   }
 
   List<Map<String, dynamic>> _buildAttemptsDataForSaving() {
-    List<Map<String, dynamic>> attemptsData = [];
-    final allLeafNodes = questions.expand((q) => getAllLeafNodes(q).isNotEmpty ? getAllLeafNodes(q) : [q]).toList();
+    print("--- [SAVE] 새로운 방식으로 attemptsData 생성을 시작합니다.");
+    final List<Map<String, dynamic>> finalAttemptsData = [];
 
-    for (var questionData in allLeafNodes) {
-      final uniqueId = questionData['uniqueDisplayId'] as String?;
-      if (uniqueId == null) continue;
+    // 1. 최상위 문제 목록을 기준으로 반복합니다.
+    for (final parentQuestionData in questions) {
+      // 2. 계층 구조를 보존하며 데이터를 깊은 복사합니다.
+      final newFullQuestionData = json.decode(json.encode(parentQuestionData));
 
-      final userAnswerList = userSubmittedAnswers[uniqueId];
-      final gradingResult = aiGradingResults[uniqueId];
-      bool isCorrect = submissionStatus[uniqueId] ?? false;
+      // 재귀적으로 각 노드의 채점 결과를 업데이트하는 함수
+      void updateNodeResults(Map<String, dynamic> node) {
+        final uniqueId = node['uniqueDisplayId'] as String?;
+        if (uniqueId != null) {
+          final isCorrect = submissionStatus[uniqueId];
+          final userAnswer = userSubmittedAnswers[uniqueId];
+          final aiResult = aiGradingResults[uniqueId];
 
-      attemptsData.add({
-        'originalQuestionNo': questionData['no']?.toString() ?? 'N/A',
-        'isCorrect': isCorrect,
-        'userAnswer': userAnswerList?.join(' || ') ?? '미제출',
-        'fullQuestionData': questionData,
-        'feedback': gradingResult?.explanation,
-        'score': isCorrect
-            ? (gradingResult?.score ?? (questionData['fullscore'] as num?)?.toInt() ?? 0)
-            : 0,
-      });
+          node['isCorrect'] = isCorrect;
+          node['userAnswer'] = userAnswer?.join(' || ') ?? '미제출';
+          if (aiResult != null) {
+            node['aiScore'] = aiResult.score;
+            node['feedback'] = aiResult.explanation;
+          }
+        }
+
+        // 하위 노드에 대해 재귀적으로 함수 호출
+        if (node.containsKey('sub_questions') && node['sub_questions'] is Map) {
+          (node['sub_questions'] as Map).values.forEach((subNode) {
+            if (subNode is Map<String, dynamic>) updateNodeResults(subNode);
+          });
+        }
+        if (node.containsKey('sub_sub_questions') && node['sub_sub_questions'] is Map) {
+          (node['sub_sub_questions'] as Map).values.forEach((subSubNode) {
+            if (subSubNode is Map<String, dynamic>) updateNodeResults(subSubNode);
+          });
+        }
+      }
+
+      // 3. 복사된 데이터의 모든 노드(자신 포함)에 채점 결과를 업데이트합니다.
+      updateNodeResults(newFullQuestionData);
+
+      // 4. 최상위 문제에 대한 'attempt' 맵을 구성합니다.
+      final attempt = {
+        'isCorrect': newFullQuestionData['isCorrect'],
+        'userAnswer': newFullQuestionData['userAnswer'],
+        'fullQuestionData': newFullQuestionData, // 계층 구조가 유지된 전체 데이터를 저장
+        'score': newFullQuestionData['aiScore'] ?? (newFullQuestionData['isCorrect'] == true ? newFullQuestionData['fullscore'] : 0),
+        'feedback': newFullQuestionData['feedback'],
+      };
+
+      finalAttemptsData.add(attempt);
     }
-    return attemptsData;
+
+    print("--- [SAVE] 총 ${finalAttemptsData.length}개의 최상위 문제 결과가 생성되었습니다.");
+    return finalAttemptsData;
   }
 }
 

@@ -88,13 +88,16 @@ class FirestoreService {
       print("시험 결과 세트가 성공적으로 저장되었습니다.");
 
       // (선택 사항) 개별 문제 기록도 기존처럼 저장하고 싶다면 여기서 반복문 실행
-      // for (var attempt in attemptsData) {
-      //   saveQuestionAttempt(
-      //     questionData: attempt['fullQuestionData'],
-      //     userAnswer: attempt['userAnswer'],
-      //     isCorrect: attempt['isCorrect'],
-      //   );
-      // }
+       for (var attempt in attemptsData) {
+         saveQuestionAttempt(
+           questionData: attempt['fullQuestionData'],
+           userAnswer: attempt['userAnswer'],
+           isCorrect: attempt['isCorrect'],
+           sourceExamId : sourceExamId,
+           score: attempt['score'],
+           feedback: attempt['feedback'],
+         );
+       }
 
     } catch (e) {
       print("시험 결과 저장 중 오류 발생: $e");

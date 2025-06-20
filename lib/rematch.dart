@@ -75,13 +75,17 @@ class _RematchPageState extends State<RematchPage> {
                       final List<dynamic> attempts = resultData['attempts'] ?? [];
 
                       // 2. 각 attempt에서 문제 원본 데이터('fullQuestionData')만 추출하여
-                      //    다시 풀기용 문제 리스트를 새로 만듭니다.
                       final List<Map<String, dynamic>> questionsToRetry = attempts
                           .map((attempt) => Map<String, dynamic>.from(attempt['fullQuestionData']))
                           .toList();
 
                       // 3. 만약 문제가 없다면 사용자에게 알립니다.
-                      if (questionsToRetry.isEmpty) { /* ... */ return; }
+                      if (questionsToRetry.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('다시 풀 문제가 없습니다.')),
+                        );
+                        return;
+                      }
 
                       // 4. Navigator.push를 사용하여 ExamSessionPage로 이동하면서,
                       //    시험 제목과 방금 만든 문제 리스트를 파라미터로 전달합니다.

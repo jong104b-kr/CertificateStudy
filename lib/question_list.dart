@@ -273,7 +273,9 @@ class QuestionInteractiveDisplay extends StatelessWidget {
           style: TextStyle(color: result.isCorrect ? Colors.green : Colors.orange, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 4),
-        Text('입력한 답안: ${userSubmittedAnswers?.first ?? ''}'),
+        Text('입력한 답안: ${
+            (userSubmittedAnswers?.asMap().entries.map((e) => "(${e.key + 1}) ${e.value}").join(' || ')) ?? ''
+        }'),
         const SizedBox(height: 4),
         Text('채점 근거: ${result.explanation}'),
       ],
