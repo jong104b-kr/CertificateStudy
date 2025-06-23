@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'appbar.dart';
 import 'questions_common.dart';
 import 'question_list.dart';
-import 'studydatadownloader.dart';
 
 class ExamSessionPage extends StatefulWidget {
   final String title;
@@ -71,6 +70,8 @@ class _ExamSessionPageState extends State<ExamSessionPage> with QuestionStateMix
         submissionStatus: submissionStatus,
         userSubmittedAnswers: userSubmittedAnswers,
         aiGradingResults: aiGradingResults,
+        onSaveToIncorrectNote: addQuestionToIncorrectNote,
+        incorrectNoteSaveStatus: incorrectNoteSaveStatus,
         // titleBuilder, subtitleBuilder 등은 필요에 맞게 커스텀
         titleBuilder: (context, questionData, index) {
           final sourceText = questionData['sourceExamId'] as String? ?? '출처 없음';

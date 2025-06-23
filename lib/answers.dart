@@ -1,10 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart'; // 날짜 포맷팅을 위해 import
+import 'package:intl/intl.dart';
 
-import 'studydatadownloader.dart';
 import 'appbar.dart';
+
+/// incorrectNotes 컬렉션의 문서를 Dart 객체로 변환하는 모델 클래스
+class IncorrectNoteItem {
+  final String id;
+  final DateTime savedAt;
+  final String sourceExamId;
+  final String originalQuestionNo;
+  final Map<String, dynamic> fullQuestionData;
+
+  IncorrectNoteItem({
+    required this.id,
+    required this.savedAt,
+    required this.sourceExamId,
+    required this.originalQuestionNo,
+    required this.fullQuestionData,
+  });
+
+  factory IncorrectNoteItem.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return IncorrectNoteItem(
+      id: doc.id,
+      savedAt: (data['savedAt'] as Timestamp).toDate(),
+      sourceExamId: data['sourceExamId'] ?? '출처 없음',
+      originalQuestionNo: data['originalQuestionNo'] ?? '번호 없음',
+      fullQuestionData: data['fullQuestionData'] ?? {},
+    );
+  }
+}
 
 class AnswersPage extends StatefulWidget {
   final String title;
@@ -15,25 +42,22 @@ class AnswersPage extends StatefulWidget {
 }
 
 class _AnswersPageState extends State<AnswersPage> {
-  List<QuestionAttempt> _attempts = [];
+  List<IncorrectNoteItem> _notes = [];
   bool _isLoading = true;
   String _errorMessage = '';
+
+  final Map<String, bool> _isExpanded = {};
 
   @override
   void initState() {
     super.initState();
-    _fetchSolvedQuestions();
+    _fetchIncorrectNotes();
   }
 
-  Future<void> _fetchSolvedQuestions() async {
+  Future<void> _fetchIncorrectNotes() async {
     final User? user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = "로그인이 필요합니다.";
-        });
-      }
+      if (mounted) setState(() { _isLoading = false; _errorMessage = "로그인이 필요합니다."; });
       return;
     }
 
@@ -41,17 +65,17 @@ class _AnswersPageState extends State<AnswersPage> {
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .collection('solvedQuestions')
-          .orderBy('solvedAt', descending: true) // 최신순으로 정렬
+          .collection('incorrectNotes')
+          .orderBy('savedAt', descending: true)
           .get();
 
       if (mounted) {
-        final attempts = snapshot.docs
-            .map((doc) => QuestionAttempt.fromFirestore(doc))
+        final notes = snapshot.docs
+            .map((doc) => IncorrectNoteItem.fromFirestore(doc))
             .toList();
 
         setState(() {
-          _attempts = attempts;
+          _notes = notes;
           _isLoading = false;
         });
       }
@@ -59,10 +83,73 @@ class _AnswersPageState extends State<AnswersPage> {
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = "데이터를 불러오는 중 오류가 발생했습니다: $e";
+          _errorMessage = "오답노트 데이터를 불러오는 중 오류가 발생했습니다: $e";
         });
       }
     }
+  }
+
+  /// 이 함수는 변경 없이 그대로 사용합니다.
+  List<Widget> _buildQuestionAndAnswerWidgetsRecursive(Map<String, dynamic> questionNode, double leftIndent) {
+    final List<Widget> widgets = [];
+    final type = questionNode['type'] as String?;
+    final questionText = questionNode['question'] as String? ?? '';
+    final questionNo = questionNode['no'] as String? ?? '';
+    final answer = questionNode['answer'];
+
+    String displayNo = questionNo;
+    if (questionNo.contains('_')) {
+      displayNo = questionNo.split('_').last;
+    }
+
+    widgets.add(
+        Padding(
+          padding: EdgeInsets.only(left: leftIndent, top: 8.0, bottom: 4.0),
+          child: Text(
+            '$displayNo. $questionText',
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.black87,
+              fontWeight: leftIndent == 0 ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        )
+    );
+
+    if (type != '발문' && answer != null) {
+      String displayableAnswer = (answer is List) ? answer.join(' || ') : answer.toString();
+      widgets.add(
+          Padding(
+            padding: EdgeInsets.only(left: leftIndent + 16.0, bottom: 8.0),
+            child: Text(
+              '정답: $displayableAnswer',
+              style: const TextStyle(fontSize: 14.5, color: Colors.blue, fontWeight: FontWeight.bold),
+            ),
+          )
+      );
+    }
+
+    if (questionNode.containsKey('sub_questions') && questionNode['sub_questions'] is Map) {
+      final subQuestions = questionNode['sub_questions'] as Map<String, dynamic>;
+      final sortedKeys = subQuestions.keys.toList()..sort((a,b) => (int.tryParse(a) ?? 0).compareTo(int.tryParse(b) ?? 0));
+      for (var key in sortedKeys) {
+        if(subQuestions[key] is Map<String, dynamic>) {
+          widgets.addAll(_buildQuestionAndAnswerWidgetsRecursive(subQuestions[key], leftIndent + 8.0));
+        }
+      }
+    }
+
+    if (questionNode.containsKey('sub_sub_questions') && questionNode['sub_sub_questions'] is Map) {
+      final subSubQuestions = questionNode['sub_sub_questions'] as Map<String, dynamic>;
+      final sortedKeys = subSubQuestions.keys.toList()..sort((a,b) => (int.tryParse(a) ?? 0).compareTo(int.tryParse(b) ?? 0));
+      for (var key in sortedKeys) {
+        if(subSubQuestions[key] is Map<String, dynamic>) {
+          widgets.addAll(_buildQuestionAndAnswerWidgetsRecursive(subSubQuestions[key], leftIndent + 16.0));
+        }
+      }
+    }
+
+    return widgets;
   }
 
   @override
@@ -73,79 +160,109 @@ class _AnswersPageState extends State<AnswersPage> {
     );
   }
 
+  // --- [수정된 함수] ---
   Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_errorMessage.isNotEmpty) return Center(child: Text(_errorMessage, style: const TextStyle(color: Colors.red)));
+    if (_notes.isEmpty) return const Center(child: Text("오답노트에 저장된 문제가 없습니다."));
 
-    if (_errorMessage.isNotEmpty) {
-      return Center(child: Text(_errorMessage, style: const TextStyle(color: Colors.red)));
-    }
-
-    if (_attempts.isEmpty) {
-      return const Center(child: Text("아직 푼 문제가 없습니다."));
-    }
-
-    // 데이터가 성공적으로 로드된 경우 ListView를 표시
     return ListView.builder(
-      itemCount: _attempts.length,
+      padding: const EdgeInsets.all(8.0),
+      itemCount: _notes.length,
       itemBuilder: (context, index) {
-        final attempt = _attempts[index];
-        final localSolvedAt = attempt.solvedAt.toLocal();
-        final formattedDate = DateFormat('yyyy년 MM월 dd일 HH:mm').format(localSolvedAt);
+        final note = _notes[index];
+        final questionData = note.fullQuestionData;
+        final bool isExpanded = _isExpanded[note.id] ?? false;
 
-        // REVISED: correctAnswer의 타입에 따라 표시할 문자열을 결정하는 로직 추가
-        String displayableCorrectAnswer;
-        if (attempt.correctAnswer is List) {
-          // 타입이 리스트이면, 원소들을 ', '로 합쳐서 보여줍니다.
-          displayableCorrectAnswer = (attempt.correctAnswer as List).join(' || ');
-        } else {
-          // 리스트가 아니면(문자열 등), 그대로 문자열로 변환하여 사용합니다.
-          displayableCorrectAnswer = attempt.correctAnswer.toString();
+        final sourceText = note.sourceExamId;
+        final originalNo = note.originalQuestionNo;
+        final formattedDate = DateFormat('yyyy년 MM월 dd일 HH:mm').format(note.savedAt.toLocal());
+        final previewText = (questionData['question'] as String? ?? '문제 내용 없음').split('\n').first;
+
+        final List<Widget> childrenWidgets = [];
+        if (isExpanded) {
+          final subQuestions = questionData['sub_questions'];
+
+          if (subQuestions is Map<String, dynamic> && subQuestions.isNotEmpty) {
+            final sortedKeys = subQuestions.keys.toList()..sort((a,b) => (int.tryParse(a) ?? 0).compareTo(int.tryParse(b) ?? 0));
+            for (var key in sortedKeys) {
+              if (subQuestions[key] is Map<String, dynamic>) {
+                childrenWidgets.addAll(_buildQuestionAndAnswerWidgetsRecursive(subQuestions[key], 0));
+              }
+            }
+          }
+          else {
+            final type = questionData['type'] as String?;
+            final answer = questionData['answer'];
+            if (type != '발문' && answer != null) {
+              String displayableAnswer = (answer is List) ? answer.join(' || ') : answer.toString();
+              childrenWidgets.add(
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      '정답: $displayableAnswer',
+                      style: const TextStyle(fontSize: 14.5, color: Colors.blue, fontWeight: FontWeight.bold),
+                    ),
+                  )
+              );
+            }
+          }
         }
 
         return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          margin: const EdgeInsets.only(bottom: 12.0),
           elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "${attempt.sourceExamId} ${attempt.originalQuestionNo}번",
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-                Text(
-                  formattedDate,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  attempt.questionText,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Icon(
-                      attempt.isCorrect ? Icons.check_circle : Icons.cancel,
-                      color: attempt.isCorrect ? Colors.green : Colors.red,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => setState(() => _isExpanded[note.id] = !isExpanded),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1. leading: 아이콘
+                      const Padding(
+                        padding: EdgeInsets.only(top: 4.0, right: 16.0),
+                        child: Icon(Icons.description_outlined, color: Colors.blueGrey),
+                      ),
+                      // 2. title & subtitle
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('문제 (원본: $sourceText ${originalNo}번)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            const SizedBox(height: 4),
+                            Text(previewText, style: const TextStyle(fontSize: 15.0, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 5),
+                            Text("저장 일시: $formattedDate", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                          ],
+                        ),
+                      ),
+                      // 3. trailing: 펼침/접힘 아이콘
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4.0),
+                        child: Icon(isExpanded ? Icons.expand_less : Icons.expand_more),
+                      ),
+                    ],
+                  ),
+
+                  // --- 펼쳤을 때만 보이는 영역 ---
+                  if (isExpanded && childrenWidgets.isNotEmpty) ...[
+                    const Divider(height: 24.0, thickness: 1.0),
+                    // 디테일한 문제+정답 내용은 패딩을 주어 구분
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("내 답안: ${attempt.userAnswer}", style: const TextStyle(fontSize: 14)),
-                          Text("실제 정답: $displayableCorrectAnswer", style: const TextStyle(fontSize: 14, color: Colors.blue)),
-                        ],
+                        children: childrenWidgets,
                       ),
                     ),
-                  ],
-                ),
-              ],
+                  ]
+                ],
+              ),
             ),
           ),
         );

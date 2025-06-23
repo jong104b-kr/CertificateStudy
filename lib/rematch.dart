@@ -56,16 +56,21 @@ class _RematchPageState extends State<RematchPage> {
             itemCount: results.length,
             itemBuilder: (context, index) {
               final resultData = results[index].data();
-              final String examtitle = resultData['examTitle'] ?? '제목 없음';
+              final String examtitle  = resultData['examTitle'] ?? '제목 없음';
               final int score = resultData['totalScore'] ?? 0;
               final Timestamp solvedAt = resultData['solvedAt'] ?? Timestamp.now();
               final formattedDate = DateFormat('yyyy년 MM월 dd일 HH:mm').format(solvedAt.toDate());
+              String displayTitle = examtitle;
+              final parenthesisIndex = examtitle.indexOf(' (');
+              if (parenthesisIndex != -1) {
+                displayTitle = examtitle.substring(0, parenthesisIndex);
+              }
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 child: ListTile(
-                  title: Text(examtitle, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('$formattedDate\n점수: $score점'),
+                  title: Text(displayTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('$formattedDate 응시\n점수: $score점'),
                   isThreeLine: true,
                   trailing: ElevatedButton(
                     child: const Text('다시 풀기'),

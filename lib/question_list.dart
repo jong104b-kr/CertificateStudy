@@ -16,6 +16,10 @@ class QuestionListView extends StatelessWidget {
   /// AI 채점 결과를 받을 변수 선언
   final Map<String, GradingResult>? aiGradingResults;
 
+  /// 오답노트 저장을 위한 콜백과 상태 추가
+  final Future<void> Function(Map<String, dynamic>) onSaveToIncorrectNote;
+  final Map<String, bool> incorrectNoteSaveStatus;
+
   /// 각 페이지의 특성에 맞게 UI를 커스터마이징하기 위한 빌더 함수들
   final Widget Function(BuildContext context, Map<String, dynamic> questionData, int index) titleBuilder;
   final Widget? Function(BuildContext context, Map<String, dynamic> questionData, int index)? subtitleBuilder;
@@ -33,6 +37,8 @@ class QuestionListView extends StatelessWidget {
     this.subtitleBuilder,
     this.leadingBuilder,
     this.aiGradingResults,
+    required this.onSaveToIncorrectNote,
+    required this.incorrectNoteSaveStatus,
   });
 
   @override
@@ -43,6 +49,8 @@ class QuestionListView extends StatelessWidget {
       itemBuilder: (context, index) {
         final mainQuestionData = questions[index];
         final uniqueId = mainQuestionData['uniqueDisplayId'] as String;
+        final questionNo = mainQuestionData['no'] as String? ?? '';
+        final isSaved = incorrectNoteSaveStatus[questionNo] ?? false;
 
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 6.0),
@@ -57,6 +65,30 @@ class QuestionListView extends StatelessWidget {
             title: titleBuilder(context, mainQuestionData, index),
             subtitle: subtitleBuilder?.call(context, mainQuestionData, index),
             initiallyExpanded: questions.length <= 5,
+            // --- [수정] trailing 속성을 사용하여 오답노트 버튼 구현 ---
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 최상위 문제에만 오답노트 버튼 표시
+                TextButton(
+                  onPressed: isSaved ? null : () => onSaveToIncorrectNote(mainQuestionData),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    visualDensity: VisualDensity.compact,
+                    backgroundColor: isSaved ? Colors.grey[200] : null,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(isSaved ? Icons.check_circle_outline : Icons.add_task_outlined, size: 16, color: isSaved ? Colors.green : Colors.blue),
+                      const SizedBox(width: 4),
+                      Text(isSaved ? '저장됨' : '오답노트', style: TextStyle(fontSize: 12, color: isSaved ? Colors.black54 : Colors.blue)),
+                    ],
+                  ),
+                ),
+                // 기존의 확장/축소 아이콘
+                const Icon(Icons.expand_more),
+              ],
+            ),
             children: _buildExpansionChildren(context, mainQuestionData),
           ),
         );

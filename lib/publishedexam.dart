@@ -188,6 +188,8 @@ class _PublishedExamPageState extends State<PublishedExamPage> with QuestionStat
       submissionStatus: submissionStatus,
       userSubmittedAnswers: userSubmittedAnswers,
       aiGradingResults: aiGradingResults,
+      onSaveToIncorrectNote: addQuestionToIncorrectNote,
+      incorrectNoteSaveStatus: incorrectNoteSaveStatus,
       titleBuilder: (context, questionData, index) {
         final originalNo = questionData['no'] as String?;
         return Text('${originalNo ?? "N/A"}번', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16.5));

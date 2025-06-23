@@ -152,6 +152,8 @@ class _QuestionBankPageState extends State<QuestionBankPage> with QuestionStateM
       submissionStatus: submissionStatus,
       userSubmittedAnswers: userSubmittedAnswers,
       aiGradingResults: aiGradingResults,
+      onSaveToIncorrectNote: addQuestionToIncorrectNote,
+      incorrectNoteSaveStatus: incorrectNoteSaveStatus,
       titleBuilder: (context, questionData, index) {
         final pageOrderNo = "${index + 1}";
         final originalNo = questionData['no'] as String?;

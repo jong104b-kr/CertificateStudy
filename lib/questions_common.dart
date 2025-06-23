@@ -35,6 +35,40 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
   // 각 State 클래스에서 자신의 질문 목록을 비우는 로직을 구현하도록 강제
   void clearQuestionsList();
 
+  // --- [신규] 오답노트 저장 로직 ---
+  final Map<String, bool> incorrectNoteSaveStatus = {};
+
+  Future<void> addQuestionToIncorrectNote(Map<String, dynamic> questionData) async {
+    if (_currentExamId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("시험 ID가 설정되지 않아 저장할 수 없습니다.")));
+      return;
+    }
+    final String questionNo = questionData['no'] as String;
+    setState(() => incorrectNoteSaveStatus[questionNo] = true); // 저장 시작 상태
+
+    try {
+      // 전체 문제 구조를 그대로 전달
+      await FirestoreService.saveToIncorrectNote(
+        sourceExamId: _currentExamId!,
+        fullQuestionData: questionData,
+      );
+
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("'$questionNo'번 문제를 오답노트에 저장했습니다."))
+        );
+      }
+    } catch (e) {
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("오답노트 저장에 실패했습니다: $e"))
+        );
+        // 실패 시 상태를 원래대로 돌릴 수 있습니다.
+        setState(() => incorrectNoteSaveStatus.remove(questionNo));
+      }
+    }
+  }
+
   void startTimer() {
     _stopwatch.reset();
     _stopwatch.start();
@@ -81,6 +115,7 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
       aiGradingResults.clear();
       _stopwatch.reset();
       _isResultSaved = false;
+      incorrectNoteSaveStatus.clear();
       clearQuestionsList();
     });
   }
@@ -190,14 +225,6 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
         overallCorrect = result.isCorrect;
         if (mounted) setState(() => aiGradingResults[uniqueDisplayId] = result);
 
-        FirestoreService.saveQuestionAttempt(
-          sourceExamId: _currentExamId!,
-          questionData: questionData,
-          userAnswer: userAnswerString, // 저장 시에도 정렬된 답안을 저장할 수 있음
-          isCorrect: overallCorrect,
-          score: result.score,
-          feedback: result.explanation,
-        );
       } catch (e) {
         print("  -> !!! AI 채점 중 오류 발생: $e");
         overallCorrect = false;
@@ -230,13 +257,6 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
         overallCorrect = userAnswersSet.length == 1 && correctAnswersSet.contains(userAnswersSet.first);
       }
 
-      FirestoreService.saveQuestionAttempt(
-        questionData: questionData,
-        userAnswer: userAnswers.join(' || '),
-        isCorrect: overallCorrect,
-        sourceExamId: _currentExamId!,
-        score: overallCorrect ? (questionData['fullscore'] as num?)?.toInt() ?? 0 : 0,
-      );
     }
 
     print("--- [checkAnswer] 최종 판정 ---");
@@ -313,8 +333,8 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
           continue;
         }
 
-        bool allChildrenFullyCorrect = true;
-        int partialScore = 0;
+        bool allChildrenFullyCorrect = true; // 이 컨테이너가 완벽 정답인지 여부
+        int partialScore = 0; // 하위 문제들의 점수 합계
 
         for (final leaf in leafChildren) {
           final uniqueId = leaf['uniqueDisplayId'] as String?;
@@ -327,32 +347,34 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
           }
 
           final bool isCorrect = submissionStatus[uniqueId] ?? false;
-          print("      -> isCorrect (submissionStatus 값): $isCorrect");
 
-          if (isCorrect) {
-            if (leaf['type'] == '서술형') {
-              final aiResult = aiGradingResults[uniqueId];
-              final leafFullScore = (leaf['fullscore'] as num?)?.toInt() ?? 0;
-              print("      -> '서술형'입니다. AI 채점 결과를 확인합니다.");
-              if (aiResult != null) {
-                print("      -> AI 점수: ${aiResult.score} / 만점: $leafFullScore");
-                partialScore += aiResult.score;
-                if (aiResult.score < leafFullScore) {
-                  allChildrenFullyCorrect = false;
-                  print("      -> 부분 점수이므로 allChildrenFullyCorrect = false 로 변경");
-                }
-              } else {
-                allChildrenFullyCorrect = false;
-                print("      -> AI 채점 결과(aiResult)가 null이므로 allChildrenFullyCorrect = false 로 변경");
+          // --- [수정] 서술형 문제 채점 로직 변경 ---
+          if (leaf['type'] == '서술형') {
+            print("      -> '서술형'입니다. AI 채점 결과를 확인합니다.");
+            final aiResult = aiGradingResults[uniqueId];
+            final leafFullScore = (leaf['fullscore'] as num?)?.toInt() ?? 0;
+            if (aiResult != null) {
+              print("      -> AI 점수: ${aiResult.score} / 만점: $leafFullScore");
+              partialScore += aiResult.score; // isCorrect 여부와 상관없이 AI 점수를 더함
+              if (aiResult.score < leafFullScore) {
+                allChildrenFullyCorrect = false; // 부분 점수면 완벽 정답은 아님
+                print("      -> 부분 점수이므로 allChildrenFullyCorrect = false 로 변경");
               }
             } else {
+              // AI 채점 결과가 없으면 오답 처리
+              allChildrenFullyCorrect = false;
+              print("      -> AI 채점 결과(aiResult)가 null이므로 allChildrenFullyCorrect = false 로 변경");
+            }
+          } else { // 서술형이 아닌 다른 문제 유형 (단답형 등)
+            print("      -> isCorrect (submissionStatus 값): $isCorrect");
+            if (isCorrect) {
               final leafScore = (leaf['fullscore'] as num?)?.toInt() ?? 0;
               partialScore += leafScore;
               print("      -> '단답형/계산형' 정답. 부분 점수(partialScore)에 +$leafScore");
+            } else {
+              allChildrenFullyCorrect = false;
+              print("      -> 오답(isCorrect:false)이므로 allChildrenFullyCorrect = false 로 변경");
             }
-          } else {
-            allChildrenFullyCorrect = false;
-            print("      -> 오답(isCorrect:false)이므로 allChildrenFullyCorrect = false 로 변경");
           }
         }
 
@@ -372,20 +394,25 @@ mixin QuestionStateMixin<T extends StatefulWidget> on State<T> {
       } else {
         print("  -> 독립형 문제입니다.");
         final uniqueId = questionData['uniqueDisplayId'] as String?;
-        if (uniqueId != null && (submissionStatus[uniqueId] ?? false)) {
-          if (questionData['type'] == '서술형') {
-            final aiResult = aiGradingResults[uniqueId];
-            if (aiResult != null) {
-              totalScore += aiResult.score;
-              print("  -> [결과] 독립 서술형 정답. AI 점수 ${aiResult.score} 점을 더합니다.");
-            }
+        if (uniqueId == null) continue;
+
+        // --- [수정] 독립 서술형 문제 채점 로직 변경 ---
+        if (questionData['type'] == '서술형') {
+          final aiResult = aiGradingResults[uniqueId];
+          if (aiResult != null) {
+            totalScore += aiResult.score; // isCorrect 여부와 상관없이 AI 점수를 더함
+            print("  -> [결과] 독립 서술형. AI 점수 ${aiResult.score} 점을 더합니다.");
           } else {
+            print("  -> 채점되지 않은 서술형 문제입니다.");
+          }
+        } else { // 독립 단답형/계산형 문제
+          if (submissionStatus[uniqueId] ?? false) {
             final score = (questionData['fullscore'] as num?)?.toInt() ?? 0;
             totalScore += score;
             print("  -> [결과] 독립 단답형/계산형 정답. $score 점을 더합니다.");
+          } else {
+            print("  -> 오답이거나 채점되지 않은 문제입니다.");
           }
-        } else {
-          print("  -> 오답이거나 채점되지 않은 문제입니다.");
         }
       }
       print("[현재까지 총점]: $totalScore");
@@ -543,6 +570,9 @@ class QuestionInteractiveDisplay extends StatefulWidget {
 
   final Map<String, GradingResult>? aiGradingResults;
 
+  final Future<void> Function(Map<String, dynamic>) onSaveToIncorrectNote;
+  final bool isSavedToIncorrectNote;
+
   const QuestionInteractiveDisplay({
     super.key,
     required this.questionData,
@@ -557,6 +587,8 @@ class QuestionInteractiveDisplay extends StatefulWidget {
     required this.submissionStatus,
     required this.userSubmittedAnswers,
     this.aiGradingResults,
+    required this.onSaveToIncorrectNote,
+    required this.isSavedToIncorrectNote,
   });
 
   @override
@@ -609,6 +641,8 @@ class _QuestionInteractiveDisplayState
     List<String>? userSubmittedAnswersForDisplay =
         isAnswerable ? widget.userSubmittedAnswers : null;
 
+    final bool isTopLevelQuestion = widget.leftIndent == 0 && widget.parentQuestionData == null;
+
     return Padding(
       padding: EdgeInsets.only(
         left: widget.leftIndent,
@@ -619,32 +653,66 @@ class _QuestionInteractiveDisplayState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (widget.showQuestionText)
-            Text(
-              '${widget.displayNoWithPrefix} ${questionTextContent}${widget.questionTypeToDisplay}',
-              textAlign: TextAlign.start,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight:
-                    widget.leftIndent == 0 && widget.showQuestionText
-                        ? FontWeight.w600
-                        : (widget.leftIndent < 24.0
-                            ? FontWeight.w500
-                            : FontWeight.normal),
-              ),
-            )
-          else if (widget.displayNoWithPrefix.isNotEmpty)
-            Padding(
-              padding: EdgeInsets.only(bottom: (isAnswerable ? 4.0 : 0)),
-              child: Text(
-                '${widget.displayNoWithPrefix}${widget.questionTypeToDisplay}',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.blueGrey[700],
+          // --- [수정] 최상위 문제일 경우, 문제 텍스트와 오답노트 버튼을 함께 표시 ---
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.showQuestionText)
+                      Text(
+                        '${widget.displayNoWithPrefix} ${questionTextContent}${widget.questionTypeToDisplay}',
+                        textAlign: TextAlign.start,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight:
+                          widget.leftIndent == 0 && widget.showQuestionText
+                              ? FontWeight.w600
+                              : (widget.leftIndent < 24.0
+                              ? FontWeight.w500
+                              : FontWeight.normal),
+                        ),
+                      )
+                    else if (widget.displayNoWithPrefix.isNotEmpty)
+                      Padding(
+                        padding: EdgeInsets.only(bottom: (isAnswerable ? 4.0 : 0)),
+                        child: Text(
+                          '${widget.displayNoWithPrefix}${widget.questionTypeToDisplay}',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.blueGrey[700],
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            ),
+              // [신규] '오답노트에 등록' 버튼
+              if (isTopLevelQuestion) ...[
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  icon: Icon(
+                    widget.isSavedToIncorrectNote ? Icons.check_circle : Icons.add_circle_outline,
+                    size: 18,
+                  ),
+                  label: Text(
+                    widget.isSavedToIncorrectNote ? '저장됨' : '오답노트',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                  onPressed: widget.isSavedToIncorrectNote
+                      ? null // 이미 저장되었으면 비활성화
+                      : () => widget.onSaveToIncorrectNote(widget.questionData),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    backgroundColor: widget.isSavedToIncorrectNote ? Colors.grey[200] : null,
+                  ),
+                ),
+              ],
+            ],
+          ),
 
           if (widget.showQuestionText && isAnswerable)
             const SizedBox(height: 8.0),
