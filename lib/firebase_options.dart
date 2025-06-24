@@ -3,6 +3,7 @@
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // .env 파일을 위해 import
 
 /// Default [FirebaseOptions] for use with your Firebase apps.
 ///
@@ -31,7 +32,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
+              'you can reconfigure this by running the FlutterFire CLI again.',
         );
       default:
         throw UnsupportedError(
@@ -40,52 +41,51 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDwzTNWuo5BRtHq63aa5AwjZ_UY2t5mzkM',
-    appId: '1:138269778259:web:4825ee186a4193bd85c1a6',
-    messagingSenderId: '138269778259',
-    projectId: 'certificatestudyaiffelcore12th',
-    authDomain: 'certificatestudyaiffelcore12th.firebaseapp.com',
-    storageBucket: 'certificatestudyaiffelcore12th.firebasestorage.app',
-    measurementId: 'G-D1NZ0MCPSC',
+  static final FirebaseOptions web = FirebaseOptions(
+    apiKey: dotenv.env['FIREBASE_API_KEY_WEB']!,
+    appId: dotenv.env['FIREBASE_APP_ID_WEB']!,
+    messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID']!,
+    projectId: dotenv.env['FIREBASE_PROJECT_ID']!,
+    authDomain: dotenv.env['FIREBASE_AUTH_DOMAIN_WEB']!,
+    storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET']!,
+    measurementId: dotenv.env['FIREBASE_MEASUREMENT_ID_WEB']!,
   );
 
-  static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyAo_xFku7RSNgoNXd25tnCFcTql66kRKDg',
-    appId: '1:138269778259:android:600c96b00125157c85c1a6',
-    messagingSenderId: '138269778259',
-    projectId: 'certificatestudyaiffelcore12th',
-    storageBucket: 'certificatestudyaiffelcore12th.firebasestorage.app',
+  static final FirebaseOptions android = FirebaseOptions(
+    apiKey: dotenv.env['FIREBASE_API_KEY_ANDROID']!,
+    appId: dotenv.env['FIREBASE_APP_ID_ANDROID']!,
+    messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID']!,
+    projectId: dotenv.env['FIREBASE_PROJECT_ID']!,
+    storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET']!,
   );
 
-  static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyC-g5NRMM3cpF5ujplNOeY_pxhy_xDwne4',
-    appId: '1:138269778259:ios:ba5dbeb283ba8d1285c1a6',
-    messagingSenderId: '138269778259',
-    projectId: 'certificatestudyaiffelcore12th',
-    storageBucket: 'certificatestudyaiffelcore12th.firebasestorage.app',
-    androidClientId: '138269778259-aj13c8mimc8jjrg6mmcgaodfgoojslv0.apps.googleusercontent.com',
-    iosBundleId: 'com.example.certificatestudy2',
+  static final FirebaseOptions ios = FirebaseOptions(
+    apiKey: dotenv.env['FIREBASE_API_KEY_IOS']!,
+    appId: dotenv.env['FIREBASE_APP_ID_IOS']!,
+    messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID']!,
+    projectId: dotenv.env['FIREBASE_PROJECT_ID']!,
+    storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET']!,
+    androidClientId: dotenv.env['FIREBASE_ANDROID_CLIENT_ID_IOS']!,
+    iosBundleId: dotenv.env['FIREBASE_IOS_BUNDLE_ID']!,
   );
 
-  static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyC-g5NRMM3cpF5ujplNOeY_pxhy_xDwne4',
-    appId: '1:138269778259:ios:ba5dbeb283ba8d1285c1a6',
-    messagingSenderId: '138269778259',
-    projectId: 'certificatestudyaiffelcore12th',
-    storageBucket: 'certificatestudyaiffelcore12th.firebasestorage.app',
-    androidClientId: '138269778259-aj13c8mimc8jjrg6mmcgaodfgoojslv0.apps.googleusercontent.com',
-    iosBundleId: 'com.example.certificatestudy2',
+  static final FirebaseOptions macos = FirebaseOptions(
+    apiKey: dotenv.env['FIREBASE_API_KEY_IOS']!,
+    appId: dotenv.env['FIREBASE_APP_ID_IOS']!,
+    messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID']!,
+    projectId: dotenv.env['FIREBASE_PROJECT_ID']!,
+    storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET']!,
+    androidClientId: dotenv.env['FIREBASE_ANDROID_CLIENT_ID_IOS']!,
+    iosBundleId: dotenv.env['FIREBASE_IOS_BUNDLE_ID']!,
   );
 
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyDwzTNWuo5BRtHq63aa5AwjZ_UY2t5mzkM',
-    appId: '1:138269778259:web:2c33830f8a5b997385c1a6',
-    messagingSenderId: '138269778259',
-    projectId: 'certificatestudyaiffelcore12th',
-    authDomain: 'certificatestudyaiffelcore12th.firebaseapp.com',
-    storageBucket: 'certificatestudyaiffelcore12th.firebasestorage.app',
-    measurementId: 'G-SD9DT10Q32',
+  static final FirebaseOptions windows = FirebaseOptions(
+    apiKey: dotenv.env['FIREBASE_API_KEY_WINDOWS']!,
+    appId: dotenv.env['FIREBASE_APP_ID_WINDOWS']!,
+    messagingSenderId: dotenv.env['FIREBASE_MESSAGING_SENDER_ID']!,
+    projectId: dotenv.env['FIREBASE_PROJECT_ID']!,
+    authDomain: dotenv.env['FIREBASE_AUTH_DOMAIN_WINDOWS']!,
+    storageBucket: dotenv.env['FIREBASE_STORAGE_BUCKET']!,
+    measurementId: dotenv.env['FIREBASE_MEASUREMENT_ID_WINDOWS']!,
   );
-
 }
