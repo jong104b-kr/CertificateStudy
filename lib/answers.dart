@@ -177,7 +177,8 @@ class _AnswersPageState extends State<AnswersPage> {
         final sourceText = note.sourceExamId;
         final originalNo = note.originalQuestionNo;
         final formattedDate = DateFormat('yyyy년 MM월 dd일 HH:mm').format(note.savedAt.toLocal());
-        final previewText = (questionData['question'] as String? ?? '문제 내용 없음').split('\n').first;
+        // [수정] .split('\n').first 제거하여 전체 텍스트를 가져오도록 변경
+        final fullQuestionText = questionData['question'] as String? ?? '문제 내용 없음';
 
         final List<Widget> childrenWidgets = [];
         if (isExpanded) {
@@ -223,25 +224,26 @@ class _AnswersPageState extends State<AnswersPage> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 1. leading: 아이콘
                       const Padding(
                         padding: EdgeInsets.only(top: 4.0, right: 16.0),
                         child: Icon(Icons.description_outlined, color: Colors.blueGrey),
                       ),
-                      // 2. title & subtitle
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text('문제 (원본: $sourceText ${originalNo}번)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                             const SizedBox(height: 4),
-                            Text(previewText, style: const TextStyle(fontSize: 15.0, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            // [수정] fullQuestionText를 사용하고 maxLines, overflow 속성 제거
+                            Text(
+                              fullQuestionText,
+                              style: const TextStyle(fontSize: 15.0, color: Colors.black87, height: 1.5),
+                            ),
                             const SizedBox(height: 5),
                             Text("저장 일시: $formattedDate", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                           ],
                         ),
                       ),
-                      // 3. trailing: 펼침/접힘 아이콘
                       Padding(
                         padding: const EdgeInsets.only(top: 4.0),
                         child: Icon(isExpanded ? Icons.expand_less : Icons.expand_more),
@@ -249,10 +251,8 @@ class _AnswersPageState extends State<AnswersPage> {
                     ],
                   ),
 
-                  // --- 펼쳤을 때만 보이는 영역 ---
                   if (isExpanded && childrenWidgets.isNotEmpty) ...[
                     const Divider(height: 24.0, thickness: 1.0),
-                    // 디테일한 문제+정답 내용은 패딩을 주어 구분
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8.0),
                       child: Column(
